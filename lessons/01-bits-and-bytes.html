@@ -42,7 +42,6 @@
   .hexgrid b { display: block; font-size: 1.1rem; }
   @media (max-width: 600px) { .hexgrid { grid-template-columns: repeat(4, 1fr); } }
 
-  svg text { font-family: var(--sans); fill: var(--ink); }
   .wheel .pos { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
   .wheel .neg { fill: var(--bad-bg); stroke: var(--bad); stroke-width: 1.5; }
   .wheel .val { font: 700 13px var(--sans); text-anchor: middle; }
@@ -63,10 +62,6 @@
   .verdict.no { color: var(--bad); }
   .verdict.yes { color: var(--good); }
 
-  pre { font: .9rem/1.6 var(--mono); background: var(--code-bg); padding: 1rem 1.2rem; border-radius: 8px; overflow-x: auto; }
-  pre code { background: none; padding: 0; }
-  .story { margin: 1.4rem 0; }
-  .story h3 { margin: 0 0 .3rem; font-size: 1.05rem; }
 </style>
 </head>
 <body>
@@ -475,7 +470,7 @@ b'caf\xc3\xa9'
     <h2 style="margin-top:0">Finish lesson 1</h2>
     <p class="finish-note"></p>
     <button class="btn" type="button" data-finish="bits">Finish lesson</button>
-    <p style="margin:1.2rem 0 0">Next: <strong>From logic gates to a CPU</strong>, where these bits start doing arithmetic on their own.</p>
+    <p style="margin:1.2rem 0 0">Next: <a href="02-gates-to-cpu.html"><strong>From logic gates to a CPU</strong></a>, where these bits start doing arithmetic on their own.</p>
   </section>
 
   <section class="refs" aria-labelledby="refs-title">

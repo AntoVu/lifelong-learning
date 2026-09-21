@@ -8,7 +8,7 @@ window.CURRICULUM = [
     sources: ['Harvard CS50', 'MIT 6.100L', 'CMU 15-213', 'Nand2Tetris'],
     lessons: [
       { id: 'bits', title: 'Bits, bytes, and how everything becomes a number', href: 'lessons/01-bits-and-bytes.html', minutes: 45 },
-      { id: 'gates', title: 'From logic gates to a CPU' },
+      { id: 'gates', title: 'From logic gates to a CPU', href: 'lessons/02-gates-to-cpu.html', minutes: 55 },
       { id: 'fetch', title: 'How a program actually runs' },
       { id: 'first-programs', title: 'Values, variables, and control flow' },
       { id: 'functions', title: 'Functions and abstraction' },

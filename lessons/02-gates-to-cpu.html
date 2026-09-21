@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From logic gates to a CPU | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  /* Wires: off is thin gray, on is a thick highlighter stroke over an ink outline. */
+  .wire { fill: none; stroke: var(--rule); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  .wire.on { stroke: var(--hl); stroke-width: 4; }
+  .wire-under { fill: none; stroke: var(--ink); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+  .ink-wire { fill: none; stroke: var(--ink); stroke-width: 2.5; stroke-linejoin: round; }
+  .lamp { fill: var(--paper); stroke: var(--ink); stroke-width: 2.5; }
+  .lamp.on { fill: var(--hl); }
+  .dot { fill: var(--ink); }
+  .glabel { font: 600 13px var(--sans); }
+  .gsmall { font: 12px var(--sans); fill: var(--ink-2); }
+
+  .bench { display: grid; gap: 1rem; }
+  .gate-picker { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .gate-picker button { font: 600 .9rem var(--mono); padding: .35em .8em; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); cursor: pointer; }
+  .gate-picker button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .bench-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  .inputs { display: grid; gap: .5rem; font: 600 .95rem var(--sans); }
+  .inputs label { display: flex; gap: .5rem; align-items: center; }
+  .bench svg { width: 280px; max-width: 100%; }
+  .truth { width: auto; min-width: 12rem; font-family: var(--mono); }
+  .truth td, .truth th { text-align: center; padding: .3rem .8rem; }
+  .truth tr.now { background: var(--hl); color: var(--hl-ink); }
+  .formula { font: .95rem var(--sans); color: var(--ink-2); margin: 0; }
+
+  .io { display: flex; flex-wrap: wrap; gap: .8rem 2rem; align-items: center; font: .95rem var(--sans); margin-bottom: .8rem; }
+  .io > div { display: flex; gap: .6rem; align-items: center; }
+  .io b { font-family: var(--mono); font-size: 1.05rem; }
+  .readline { font: 1rem var(--mono); margin: .6rem 0 0; overflow-wrap: anywhere; }
+
+  .ops { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .flags { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; margin: 1rem 0 .5rem; }
+  .flag { border: 1.5px solid var(--rule); border-radius: 6px; padding: .4rem .6rem; font: .85rem var(--sans); color: var(--ink-2); }
+  .flag b { display: block; font: 700 1.1rem var(--mono); color: var(--ink); }
+  .flag.set { border-color: var(--ink); background: var(--hl); color: var(--hl-ink); }
+  .flag.set b { color: var(--hl-ink); }
+  .flagnote { font: .95rem var(--sans); min-height: 1.4em; margin: 0; }
+  @media (max-width: 600px) { .flags { grid-template-columns: repeat(2, 1fr); } }
+
+  .reg { display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: end; }
+  .reg .stored { font: 700 2rem var(--mono); letter-spacing: .15em; }
+  .reg .cap { font: .85rem var(--sans); color: var(--ink-2); display: block; }
+  .ticks { font: .9rem var(--sans); color: var(--ink-2); margin: .6rem 0 0; }
+  .stored.flash { animation: flash .5s ease-out; }
+  @keyframes flash { from { background: var(--hl); } }
+
+  .nand-grid { display: grid; gap: 1.2rem; margin: 1.5rem 0; }
+  .nand-grid figure { margin: 0; }
+  .nand-grid figcaption { font: .9rem var(--sans); color: var(--ink-2); }
+</style>
+</head>
+<body>
+<!-- Gate shapes, shared by every diagram on this page. Each fits a 120x80 box; inputs at y=25/55 (NOT: y=40), output at y=40. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="g-and" viewBox="0 0 120 80"><path d="M30,10 H55 A30,30 0 0 1 55,70 H30 Z" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.5"/></symbol>
+    <symbol id="g-nand" viewBox="0 0 120 80"><path d="M30,10 H55 A30,30 0 0 1 55,70 H30 Z" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.5"/><circle cx="90" cy="40" r="5" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.5"/></symbol>
+    <symbol id="g-or" viewBox="0 0 120 80"><path d="M28,10 Q60,10 88,40 Q60,70 28,70 Q42,40 28,10 Z" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.5"/></symbol>
+    <symbol id="g-nor" viewBox="0 0 120 80"><path d="M28,10 Q60,10 88,40 Q60,70 28,70 Q42,40 28,10 Z" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.5"/><circle cx="93" cy="40" r="5" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.5"/></symbol>
+    <symbol id="g-xor" viewBox="0 0 120 80"><path d="M28,10 Q60,10 88,40 Q60,70 28,70 Q42,40 28,10 Z" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.5"/><path d="M20,10 Q34,40 20,70" fill="none" stroke="var(--ink)" stroke-width="2.5"/></symbol>
+    <symbol id="g-not" viewBox="0 0 120 80"><path d="M30,15 L74,40 L30,65 Z" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.5"/><circle cx="79" cy="40" r="5" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.5"/></symbol>
+  </defs>
+</svg>
+
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 1: How computers work, lesson 2 of 5</div>
+    <h1>From logic gates to a CPU</h1>
+    <p class="lede">In lesson 1, bits were just stored values. Here they start doing work. You'll build up from a single switch to a circuit that adds, subtracts, and remembers, which is most of what a processor is.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="bench-title">
+    <h2 id="bench-title" style="margin-top:0;font-size:1.25rem">The gate bench</h2>
+    <div class="try">Pick a gate, then flip its inputs. The yellow wires carry a 1.</div>
+    <div class="bench">
+      <div class="gate-picker" id="picker" role="group" aria-label="Gate type"></div>
+      <div class="bench-row">
+        <div class="inputs" id="bench-inputs"></div>
+        <svg id="bench-svg" viewBox="0 0 200 80" role="img" aria-label="Gate diagram"></svg>
+        <table class="truth" id="bench-truth"></table>
+      </div>
+      <p class="formula" id="bench-formula" aria-live="polite"></p>
+    </div>
+  </section>
+  <p>Every gate on that bench takes bits in and sends one bit out. By the end of this lesson, you'll have wired a handful of them into an adder, an ALU, and a register.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain how a transistor acts as a switch, and how switches make logic.</li>
+      <li>Read and write truth tables for AND, OR, NOT, NAND, NOR, and XOR.</li>
+      <li>Show why NAND alone is enough to build every other gate.</li>
+      <li>Build a binary adder from gates, and turn it into a subtractor.</li>
+      <li>Explain what an ALU does and what its status flags mean.</li>
+      <li>Describe how a circuit remembers a bit, and what the clock is for.</li>
+      <li>Name the main parts of a CPU and how they connect.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#switches">Switches that flip switches</a></li>
+      <li><a href="#gates">Logic gates and truth tables</a></li>
+      <li><a href="#nand">One gate to build them all</a></li>
+      <li><a href="#adding">Adding with gates</a></li>
+      <li><a href="#ripple">A 4-bit adder</a></li>
+      <li><a href="#alu">Subtraction and the ALU</a></li>
+      <li><a href="#memory">Remembering: registers and the clock</a></li>
+      <li><a href="#cpu">Putting it together: a CPU</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="switches">Switches that flip switches</h2>
+  <p>A <span class="hl">transistor</span> is a switch with no moving parts. It has three connections. A voltage on one of them, the gate, decides whether current can flow between the other two. Unlike a light switch, it's controlled by electricity, so <strong>the output of one transistor can control another</strong>. That's the whole trick. Chain enough of them and you can compute.</p>
+  <p>The way you wire switches decides what they compute. Put two in a row (in series) and current only gets through if both are closed. Put them side by side (in parallel) and either one is enough.</p>
+
+  <figure class="figure">
+    <svg viewBox="0 0 680 190" role="img" aria-labelledby="sw-t">
+      <title id="sw-t">Two circuits with switch A closed and switch B open. In series the lamp is off, because current needs both switches. In parallel the lamp is on, because one closed switch is enough.</title>
+      <text x="20" y="24" class="glabel">In series: A AND B</text>
+      <text x="370" y="24" class="glabel">In parallel: A OR B</text>
+      <!-- series -->
+      <path class="ink-wire" d="M20,90 H60 M110,90 H150 M200,90 H250 M280,90 H310 V165 H172 M158,165 H20 V90"/>
+      <line x1="60" y1="90" x2="110" y2="90" class="ink-wire"/>
+      <line x1="150" y1="90" x2="192" y2="66" class="ink-wire"/>
+      <circle cx="60" cy="90" r="4" class="dot"/><circle cx="110" cy="90" r="4" class="dot"/><circle cx="150" cy="90" r="4" class="dot"/><circle cx="200" cy="90" r="4" class="dot"/>
+      <line x1="158" y1="148" x2="158" y2="182" stroke="var(--ink)" stroke-width="3"/><line x1="172" y1="157" x2="172" y2="173" stroke="var(--ink)" stroke-width="3"/>
+      <circle cx="265" cy="90" r="15" class="lamp"/>
+      <text x="85" y="78" class="gsmall" text-anchor="middle">A closed</text>
+      <text x="178" y="112" class="gsmall" text-anchor="middle">B open</text>
+      <text x="265" y="125" class="gsmall" text-anchor="middle">off</text>
+      <!-- parallel -->
+      <path class="ink-wire" d="M370,90 H400 M400,50 V130 M400,50 H440 M490,50 H540 M400,130 H440 M490,130 H540 M540,50 V130 M540,90 H580 M610,90 H640 V165 H522 M508,165 H370 V90"/>
+      <line x1="440" y1="50" x2="490" y2="50" class="ink-wire"/>
+      <line x1="440" y1="130" x2="482" y2="106" class="ink-wire"/>
+      <circle cx="440" cy="50" r="4" class="dot"/><circle cx="490" cy="50" r="4" class="dot"/><circle cx="440" cy="130" r="4" class="dot"/><circle cx="490" cy="130" r="4" class="dot"/>
+      <line x1="508" y1="148" x2="508" y2="182" stroke="var(--ink)" stroke-width="3"/><line x1="522" y1="157" x2="522" y2="173" stroke="var(--ink)" stroke-width="3"/>
+      <circle cx="595" cy="90" r="15" class="lamp on"/>
+      <text x="465" y="40" class="gsmall" text-anchor="middle">A closed</text>
+      <text x="465" y="152" class="gsmall" text-anchor="middle">B open</text>
+      <text x="595" y="125" class="gsmall" text-anchor="middle">on</text>
+    </svg>
+    <figcaption>Same switches, same positions, different wiring. Series gives AND; parallel gives OR.</figcaption>
+  </figure>
+
+  <p>Real chips use pairs of transistors (a design called CMOS) rather than lamps and batteries, but the idea is the same. The first microprocessor, Intel's 4004 from 1971, had about 2,300 transistors. Large chips today have tens of billions, each one a tiny switch.</p>
+
+  <!-- 2 -->
+  <h2 id="gates">Logic gates and truth tables</h2>
+  <p>Engineers don't think in individual transistors. They group a few into a <span class="hl">logic gate</span>, a small circuit with a fixed rule for turning input bits into an output bit. A <span class="hl">truth table</span> lists that rule for every possible input. Try each gate on the bench above and watch its table.</p>
+
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Gate</th><th>Output is 1 when</th><th>Written as</th></tr></thead>
+    <tbody>
+      <tr><td>NOT</td><td>the input is 0 (it flips the bit)</td><td><code>¬A</code>, <code>!a</code>, <code>~a</code></td></tr>
+      <tr><td>AND</td><td>both inputs are 1</td><td><code>A·B</code>, <code>a &amp;&amp; b</code>, <code>a &amp; b</code></td></tr>
+      <tr><td>OR</td><td>at least one input is 1</td><td><code>A+B</code>, <code>a || b</code>, <code>a | b</code></td></tr>
+      <tr><td>XOR</td><td>the inputs are different</td><td><code>A⊕B</code>, <code>a ^ b</code></td></tr>
+      <tr><td>NAND</td><td>not both inputs are 1 (AND, then NOT)</td><td><code>¬(A·B)</code></td></tr>
+      <tr><td>NOR</td><td>neither input is 1 (OR, then NOT)</td><td><code>¬(A+B)</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The last column should look familiar. The <code>&amp;</code>, <code>|</code>, <code>^</code>, and <code>~</code> operators in C, Java, JavaScript, and Python are these gates, applied to every bit of a number at once. When you write <code>flags &amp; 0x04</code>, the CPU runs 32 or 64 AND gates side by side.</p>
+  <p>A truth table needs one row for every combination of inputs. Each input doubles the number of combinations, just like each bit did in lesson 1.</p>
+
+  <div class="problem" data-id="gates-p1" data-answer="8">
+    <span class="qtag">Practice 1</span>
+    <p class="q">How many rows does the truth table for a 3-input gate have?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>A 2-input gate has 4 rows. How many patterns do 3 bits have?</details>
+    <div class="solution" hidden><p>Three inputs make 2<sup>3</sup> = <strong>8</strong> combinations, from <code>000</code> to <code>111</code>.</p></div>
+  </div>
+
+  <div class="mcq" data-id="gates-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">Which gate outputs 1 when exactly one of its two inputs is 1?</p>
+    <div class="choices">
+      <button type="button" data-why="OR also outputs 1 when both inputs are 1.">OR</button>
+      <button type="button" data-why="NAND outputs 1 when both inputs are 0, too.">NAND</button>
+      <button type="button">XOR</button>
+      <button type="button" data-why="AND needs both inputs to be 1.">AND</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>XOR</strong>, "exclusive or": one or the other, but not both. Another way to read it: XOR outputs 1 when its inputs differ. That makes it a bit comparator, and you'll see it again in the adder.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="nand">One gate to build them all</h2>
+  <p>Here's a surprising fact: you only need <span class="hl">NAND</span>. Every other gate, and therefore every digital circuit, can be built from NAND gates alone. That's why the Nand2Tetris course starts its whole computer from a single NAND.</p>
+
+  <div class="nand-grid">
+    <figure>
+      <svg viewBox="0 0 230 80" role="img" aria-labelledby="n1-t" style="max-width:300px">
+        <title id="n1-t">NOT from NAND: input A feeds both inputs of one NAND gate. The output is NOT A.</title>
+        <path class="ink-wire" d="M18,40 H40 M40,25 V55 M40,25 H76 M40,55 H76 M135,40 H175"/>
+        <circle cx="40" cy="40" r="3.5" class="dot"/>
+        <use href="#g-nand" x="40" y="0" width="120" height="80"/>
+        <text x="6" y="44" class="glabel">A</text>
+        <text x="180" y="44" class="glabel">NOT A</text>
+      </svg>
+      <figcaption>NOT: tie both inputs together. NAND of A and A is NOT A. (1 gate)</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 360 80" role="img" aria-labelledby="n2-t" style="max-width:440px">
+        <title id="n2-t">AND from NAND: a NAND gate followed by a second NAND wired as NOT.</title>
+        <path class="ink-wire" d="M18,25 H76 M18,55 H76 M135,40 H150 M150,25 V55 M150,25 H196 M150,55 H196 M255,40 H290"/>
+        <circle cx="150" cy="40" r="3.5" class="dot"/>
+        <use href="#g-nand" x="40" y="0" width="120" height="80"/>
+        <use href="#g-nand" x="160" y="0" width="120" height="80"/>
+        <text x="4" y="29" class="glabel">A</text><text x="4" y="59" class="glabel">B</text>
+        <text x="294" y="44" class="glabel">A AND B</text>
+      </svg>
+      <figcaption>AND: NAND, then flip it back with a NAND-as-NOT. (2 gates)</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 370 170" role="img" aria-labelledby="n3-t" style="max-width:440px">
+        <title id="n3-t">OR from NAND: invert A and invert B with two NANDs, then NAND the results.</title>
+        <path class="ink-wire" d="M18,40 H40 M40,25 V55 M40,25 H76 M40,55 H76 M18,130 H40 M40,115 V145 M40,115 H76 M40,145 H76 M135,40 H160 V70 H216 M135,130 H170 V100 H216 M275,85 H310"/>
+        <circle cx="40" cy="40" r="3.5" class="dot"/><circle cx="40" cy="130" r="3.5" class="dot"/>
+        <use href="#g-nand" x="40" y="0" width="120" height="80"/>
+        <use href="#g-nand" x="40" y="90" width="120" height="80"/>
+        <use href="#g-nand" x="180" y="45" width="120" height="80"/>
+        <text x="4" y="44" class="glabel">A</text><text x="4" y="134" class="glabel">B</text>
+        <text x="140" y="32" class="gsmall">NOT A</text><text x="140" y="152" class="gsmall">NOT B</text>
+        <text x="314" y="89" class="glabel">A OR B</text>
+      </svg>
+      <figcaption>OR: flip both inputs, then NAND them. (3 gates)</figcaption>
+    </figure>
+  </div>
+
+  <p>The OR construction works because of <span class="hl">De Morgan's laws</span>, two rules you'll use for the rest of your career, usually when simplifying an <code>if</code> condition:</p>
+  <pre><code>not (A and B)  ==  (not A) or  (not B)
+not (A or  B)  ==  (not A) and (not B)</code></pre>
+  <p>In words: to negate a combined condition, negate each part and swap AND with OR. The OR circuit above computes NAND(¬A, ¬B) = ¬(¬A · ¬B) = A + B.</p>
+
+  <div class="problem" data-id="gates-p2" data-answer="2|two">
+    <span class="qtag">Practice 2</span>
+    <p class="q">What's the fewest NAND gates you need to build an AND gate?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>NAND is AND followed by NOT. How do you undo the NOT?</details>
+    <div class="solution" hidden><p><strong>2</strong>: one NAND, then a second NAND with both inputs tied together to act as NOT. The two NOTs cancel out.</p></div>
+  </div>
+
+  <div class="mcq" data-id="gates-q2" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">A code review asks you to simplify <code>if not (is_admin or is_owner):</code>. Which condition means the same thing?</p>
+    <div class="choices">
+      <button type="button" data-why="This is true for a regular admin who isn't the owner, but the original is false for any admin.">if not is_admin or not is_owner:</button>
+      <button type="button">if not is_admin and not is_owner:</button>
+      <button type="button" data-why="This drops the negation entirely.">if is_admin and is_owner:</button>
+      <button type="button" data-why="De Morgan swaps the operator; it doesn't keep OR.">if not is_admin or is_owner:</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>De Morgan: <code>not (A or B)</code> is <code>(not A) and (not B)</code>. "Neither an admin nor the owner." Getting this wrong in an access check is a real security bug, so it's worth checking with a truth table when in doubt.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="adding">Adding with gates</h2>
+  <p>Now for the payoff. Adding two single bits has only four cases:</p>
+  <div class="table-scroll">
+  <table style="max-width:28rem">
+    <thead><tr><th>A</th><th>B</th><th>A + B</th><th>Carry</th><th>Sum</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+      <tr><td>0</td><td>1</td><td>1</td><td>0</td><td>1</td></tr>
+      <tr><td>1</td><td>0</td><td>1</td><td>0</td><td>1</td></tr>
+      <tr><td>1</td><td>1</td><td>2 (<code>10</code> in binary)</td><td>1</td><td>0</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Look at the last two columns. The <strong>sum</strong> column is exactly XOR. The <strong>carry</strong> column is exactly AND. So two gates add two bits. This circuit is called a <span class="hl">half adder</span>.</p>
+
+  <section class="panel" aria-labelledby="ha-title">
+    <h3 id="ha-title">Half adder</h3>
+    <div class="try">Flip A and B. Watch which gate lights up.</div>
+    <div class="io" id="ha-inputs"></div>
+    <svg id="ha-svg" viewBox="0 0 400 200" role="img" aria-label="Half adder: A and B feed an XOR gate for the sum and an AND gate for the carry." style="max-width:460px"></svg>
+    <p class="readline" id="ha-read" aria-live="polite"></p>
+  </section>
+
+  <p>It's a "half" adder because it can't accept a carry coming in from the column to its right. When you add multi-digit numbers by hand, every column after the first has three things to add: two digits and a carry. A <span class="hl">full adder</span> handles that. It's two half adders chained together, plus an OR gate to combine their carries:</p>
+  <pre><code>sum   = A ⊕ B ⊕ Cin
+carry = (A · B) + ((A ⊕ B) · Cin)</code></pre>
+
+  <div class="mcq" data-id="gates-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">A full adder gets A = 1, B = 1, and carry-in = 1. What are its outputs?</p>
+    <div class="choices">
+      <button type="button" data-why="That's 1 + 1 without the carry-in.">sum 0, carry 1</button>
+      <button type="button" data-why="Three 1s add to 3, which needs two bits.">sum 1, carry 0</button>
+      <button type="button" data-why="Total is 3, not 0.">sum 0, carry 0</button>
+      <button type="button">sum 1, carry 1</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>1 + 1 + 1 = 3, which is <code>11</code> in binary: <strong>sum 1, carry 1</strong>. Check with the formula: 1 ⊕ 1 ⊕ 1 = 1, and (1·1) + (0·1) = 1.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="ripple">A 4-bit adder</h2>
+  <p>To add whole numbers, line up one full adder per bit. Each one's carry-out feeds the next one's carry-in, exactly like carrying a 1 to the next column on paper. This is a <span class="hl">ripple-carry adder</span>.</p>
+
+  <section class="panel" aria-labelledby="rc-title">
+    <h3 id="rc-title">Ripple-carry adder</h3>
+    <div class="try">Set two 4-bit numbers. Try 0111 + 0001 to watch a carry ripple across.</div>
+    <div class="io" id="rc-inputs"></div>
+    <div class="table-scroll"><svg id="rc-svg" viewBox="0 0 580 200" role="img" aria-label="Four full adders in a row, each passing its carry to the left." style="max-width:620px;min-width:520px"></svg></div>
+    <p class="readline" id="rc-read" aria-live="polite"></p>
+  </section>
+
+  <p>The name comes from the timing: adder 3 can't finish until adder 2 hands it a carry, which waits on adder 1, and so on. For 64 bits that's a long chain of waiting. Real CPUs use smarter designs (like carry-lookahead) that work out the carries in parallel, but they compute the same answer.</p>
+  <p>Notice what happens to the carry out of the leftmost adder: there's no fifth bit to put it in. That's the overflow from lesson 1, now visible as a wire with nowhere to go.</p>
+
+  <div class="problem" data-id="gates-p3" data-answer="0001|1">
+    <span class="qtag">Practice 3</span>
+    <p class="q">A 4-bit adder computes <code>1011 + 0110</code>. What 4-bit result do its four sum outputs show?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>11 + 6 = 17, but 4 bits only go up to 15. Or set it up on the adder above.</details>
+    <div class="solution" hidden><p>11 + 6 = 17 = <code>1 0001</code>. The four sum outputs show <strong>0001</strong>, and the extra 1 comes out as the final carry. In unsigned math the true answer is 16 more than what the outputs show.</p></div>
+  </div>
+
+  <!-- 6 -->
+  <h2 id="alu">Subtraction and the ALU</h2>
+  <p>You don't need a separate subtractor. Lesson 1 showed that −B is "flip every bit of B, then add 1." So:</p>
+  <pre><code>A − B  =  A + (flipped B) + 1</code></pre>
+  <p>The adder already has a place to put that extra 1: the carry-in of the first full adder, which is otherwise 0. And flipping B on demand is a job for XOR, because <code>x ⊕ 0 = x</code> and <code>x ⊕ 1 = ¬x</code>. Send each bit of B through an XOR gate whose other input is a "subtract" control line. When the line is 0, B passes through unchanged. When it's 1, every bit of B flips, and the same line sets the first carry-in to 1.</p>
+
+  <div class="mcq" data-id="gates-q4" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">To compute A − B, the circuit flips every bit of B <em>and</em> sets the first carry-in to 1. Why the carry-in?</p>
+    <div class="choices">
+      <button type="button">It's the "+1" in "flip the bits and add 1"</button>
+      <button type="button" data-why="The carry-in is an input, not an error signal.">It signals that the result might overflow</button>
+      <button type="button" data-why="Flipping is the XOR gates' job. The carry-in adds.">It flips the bits of B</button>
+      <button type="button" data-why="Subtraction gives the right answer for both signed and unsigned values; the carry-in isn't about sign.">It marks the result as negative</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>Flipped B plus 1 is −B in two's complement. The carry-in supplies that <strong>+1</strong> for free, without any extra adder.</p></div>
+  </div>
+
+  <p>Add a few more operations, like bitwise AND, OR, and XOR, and a selector that picks which result to output, and you have an <span class="hl">ALU</span>, the arithmetic logic unit. It's the part of the CPU that actually computes. Alongside its result, it reports <strong>flags</strong>: single bits describing the result, which later instructions can check.</p>
+
+  <section class="panel" aria-labelledby="alu-title">
+    <h3 id="alu-title">A 4-bit ALU</h3>
+    <div class="try">Choose an operation. Try 0110 + 0011 and watch the V flag.</div>
+    <div class="io" id="alu-inputs"></div>
+    <div class="ops gate-picker" id="alu-ops" role="group" aria-label="Operation"></div>
+    <p class="readline" id="alu-read" aria-live="polite"></p>
+    <div class="flags" id="alu-flags"></div>
+    <p class="flagnote" id="alu-note" aria-live="polite"></p>
+  </section>
+
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Flag</th><th>Set when</th><th>Used for</th></tr></thead>
+    <tbody>
+      <tr><td><b>Z</b> zero</td><td>the result is all zeros</td><td><code>if (a == b)</code>: subtract and check for zero</td></tr>
+      <tr><td><b>N</b> negative</td><td>the top bit of the result is 1</td><td><code>if (a &lt; b)</code> for signed numbers, along with V</td></tr>
+      <tr><td><b>C</b> carry</td><td>a carry came out of the top bit</td><td>unsigned overflow and unsigned comparisons</td></tr>
+      <tr><td><b>V</b> overflow</td><td>the signed result is wrong: two positives gave a negative, or two negatives gave a positive</td><td>detecting signed overflow</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>That's how a comparison like <code>a == b</code> actually runs: the ALU computes <code>a − b</code>, throws the result away, and the next instruction checks the Z flag.</p>
+
+  <div class="problem" data-id="gates-p4" data-answer="-7|−7">
+    <span class="qtag">Practice 4</span>
+    <p class="q">Treating the bits as signed 4-bit numbers, the ALU adds <code>0110</code> (6) and <code>0011</code> (3). What signed value does the 4-bit result represent?</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Add them in binary. In signed 4-bit, the top bit is worth −8.</details>
+    <div class="solution" hidden><p>6 + 3 = 9 = <code>1001</code>. As a signed 4-bit number that's −8 + 1 = <strong>−7</strong>. The largest signed 4-bit value is 7, so the answer overflowed, and the ALU sets the V flag to say so.</p></div>
+  </div>
+
+  <!-- 7 -->
+  <h2 id="memory">Remembering: registers and the clock</h2>
+  <p>Every circuit so far forgets instantly: change an input and the output changes with it. A computer also needs to <strong>hold</strong> values. The trick is feedback. Wire two gates so each one's output feeds the other's input, and the loop keeps itself in one state until something pushes it into the other. That loop, called a <span class="hl">latch</span>, stores one bit.</p>
+  <p>A refined version, the <span class="hl">flip-flop</span>, only accepts a new value at one exact moment: when a <span class="hl">clock</span> signal ticks. Put several flip-flops side by side, all listening to the same clock, and you have a <span class="hl">register</span>, a small group of bits that holds a value between ticks.</p>
+
+  <section class="panel" aria-labelledby="reg-title">
+    <h3 id="reg-title">A 4-bit register</h3>
+    <div class="try">Change the data bits. The stored value only changes when you tick the clock.</div>
+    <div class="reg">
+      <div><span class="cap">Data in</span><span class="bits-row" id="reg-in"></span></div>
+      <button class="btn" type="button" id="reg-tick">Tick the clock</button>
+      <div><span class="cap">Stored (output)</span><span class="stored" id="reg-out">0000</span></div>
+    </div>
+    <p class="ticks" id="reg-ticks" aria-live="polite">No ticks yet.</p>
+  </section>
+
+  <div class="mcq" data-id="gates-q5" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">A register holds <code>0101</code>. You change its data input to <code>1111</code> but the clock doesn't tick. What does the register output?</p>
+    <div class="choices">
+      <button type="button" data-why="The output only follows the input when the clock ticks.">1111</button>
+      <button type="button" data-why="Nothing cleared it. The feedback loop keeps the bits.">0000</button>
+      <button type="button">0101</button>
+      <button type="button" data-why="Registers don't combine old and new values.">1010</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>Still <strong>0101</strong>. The register only samples its input on a tick. That's what keeps a CPU orderly: every part computes from the values stored at the last tick, and all the results are saved together on the next one.</p></div>
+  </div>
+
+  <p>The clock sets the pace for the whole chip. A 3 GHz processor ticks 3 billion times a second. Each tick lasts about a third of a nanosecond, during which light travels only about 10 centimeters. Every signal in one step of the circuit has to settle before the next tick, which is one reason chips are small.</p>
+
+  <div class="problem" data-id="gates-p5" data-answer="0.25|.25|1/4|0.25ns|250ps">
+    <span class="qtag">Practice 5</span>
+    <p class="q">How long is one clock tick on a 4 GHz processor, in nanoseconds?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="decimal" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>4 GHz is 4 billion ticks per second, and a nanosecond is one billionth of a second.</details>
+    <div class="solution" hidden><p>1 ÷ 4,000,000,000 seconds = <strong>0.25 ns</strong> (250 picoseconds).</p></div>
+  </div>
+
+  <!-- 8 -->
+  <h2 id="cpu">Putting it together: a CPU</h2>
+  <p>You've now seen every major piece of a processor. A simple CPU is these parts wired together:</p>
+
+  <figure class="figure">
+    <svg viewBox="0 0 660 320" role="img" aria-labelledby="cpu-t">
+      <title id="cpu-t">A CPU contains a control unit, registers, an ALU, and a clock. The control unit tells the registers and ALU what to do; the ALU reads from and writes to registers; the clock drives everything. Memory sits outside the CPU, connected by a bus.</title>
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/></marker></defs>
+      <rect x="10" y="10" width="440" height="300" rx="12" fill="none" stroke="var(--ink)" stroke-width="2.5"/>
+      <text x="26" y="36" class="glabel">CPU</text>
+      <!-- control unit -->
+      <rect x="30" y="56" width="160" height="90" rx="8" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="110" y="92" class="glabel" text-anchor="middle">Control unit</text>
+      <text x="110" y="112" class="gsmall" text-anchor="middle">decides what happens</text>
+      <text x="110" y="128" class="gsmall" text-anchor="middle">each tick (lesson 3)</text>
+      <!-- registers -->
+      <rect x="250" y="56" width="180" height="90" rx="8" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="340" y="80" class="glabel" text-anchor="middle">Registers</text>
+      <g font-family="var(--mono)" font-size="12">
+        <rect x="266" y="92" width="70" height="20" fill="var(--hl)" stroke="var(--ink)"/><text x="272" y="106">R0 0110</text>
+        <rect x="344" y="92" width="70" height="20" fill="var(--paper)" stroke="var(--ink)"/><text x="350" y="106">R1 0011</text>
+        <rect x="266" y="116" width="70" height="20" fill="var(--paper)" stroke="var(--ink)"/><text x="272" y="130">R2 0000</text>
+        <rect x="344" y="116" width="70" height="20" fill="var(--paper)" stroke="var(--ink)"/><text x="350" y="130">R3 1001</text>
+      </g>
+      <!-- ALU -->
+      <polygon points="250,190 320,190 340,212 360,190 430,190 395,290 285,290" fill="var(--hl)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="340" y="252" class="glabel" text-anchor="middle" fill="#1b2a41">ALU</text>
+      <text x="340" y="272" class="gsmall" text-anchor="middle" fill="#1b2a41">+ − AND OR XOR</text>
+      <!-- clock -->
+      <rect x="30" y="200" width="160" height="80" rx="8" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="110" y="228" class="glabel" text-anchor="middle">Clock</text>
+      <path d="M58,262 h14 v-16 h20 v16 h20 v-16 h20 v16 h14" fill="none" stroke="var(--ink)" stroke-width="2"/>
+      <!-- arrows -->
+      <line x1="190" y1="100" x2="246" y2="100" stroke="var(--ink)" stroke-width="2" marker-end="url(#arr)"/>
+      <path d="M190,125 H222 V240 H262" fill="none" stroke="var(--ink)" stroke-width="2" marker-end="url(#arr)"/>
+      <text x="0" y="0" class="gsmall" transform="translate(216 214) rotate(-90)">operation</text>
+      <line x1="300" y1="150" x2="300" y2="186" stroke="var(--ink)" stroke-width="2" marker-end="url(#arr)"/>
+      <line x1="390" y1="150" x2="390" y2="186" stroke="var(--ink)" stroke-width="2" marker-end="url(#arr)"/>
+      <path d="M395,290 V300 H440 V128 H434" fill="none" stroke="var(--ink)" stroke-width="2" marker-end="url(#arr)"/>
+      <text x="306" y="174" class="gsmall">inputs</text>
+      <path d="M110,200 V150" fill="none" stroke="var(--ink)" stroke-width="2" stroke-dasharray="4 4"/>
+      <text x="118" y="180" class="gsmall">ticks</text>
+      <!-- memory -->
+      <rect x="500" y="56" width="140" height="220" rx="8" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="570" y="82" class="glabel" text-anchor="middle">Memory</text>
+      <g font-family="var(--mono)" font-size="11" fill="var(--ink-2)">
+        <text x="514" y="108">0x00  0110</text><text x="514" y="128">0x01  0011</text><text x="514" y="148">0x02  1001</text><text x="514" y="168">0x03  0000</text><text x="514" y="188">…</text>
+      </g>
+      <text x="570" y="222" class="gsmall" text-anchor="middle">program and data,</text>
+      <text x="570" y="238" class="gsmall" text-anchor="middle">billions of bytes</text>
+      <line x1="452" y1="100" x2="496" y2="100" stroke="var(--ink)" stroke-width="3" marker-start="url(#arr)" marker-end="url(#arr)"/>
+      <text x="474" y="86" class="gsmall" text-anchor="middle">bus</text>
+    </svg>
+    <figcaption>The ALU computes, the registers hold the values it works on, the clock keeps everything in step, and the control unit decides what happens on each tick. Memory, outside the CPU, holds the program and its data.</figcaption>
+  </figure>
+
+  <ul>
+    <li><strong>ALU:</strong> the adder and friends you built in this lesson.</li>
+    <li><strong>Registers:</strong> a few dozen fast storage slots, made of flip-flops, right next to the ALU.</li>
+    <li><strong>Clock:</strong> the tick that tells every register when to save.</li>
+    <li><strong>Control unit:</strong> reads instructions from memory and sets the control lines, like the ALU's operation select and the "subtract" line.</li>
+    <li><strong>Memory:</strong> much bigger and much slower than registers. It holds the program itself, as bytes.</li>
+  </ul>
+  <p>The one piece left is the control unit: how does a list of bytes in memory become "add R0 and R1 and put the result in R3"? That's the next lesson.</p>
+
+  <h2>When hardware gets it wrong</h2>
+  <div class="story">
+    <h3>The Pentium FDIV bug, 1994</h3>
+    <p>Intel's Pentium divided numbers using a lookup table burned into the chip. Five entries out of 1,066 were missing, so certain divisions came out wrong around the fourth significant digit. A math professor, Thomas Nicely, noticed while computing with prime numbers. Software can be patched, but these gates were etched in silicon, and Intel ended up offering replacement chips at a cost of about $475 million. Hardware teams now verify designs with formal proofs and huge test suites before anything is manufactured.</p>
+  </div>
+  <div class="story">
+    <h3>Why clock speeds stopped climbing</h3>
+    <p>For decades, smaller transistors meant faster clocks at the same power. Around 2005 that stopped working (a trend called Dennard scaling broke down): pushing past roughly 4 GHz made chips too hot to cool. So the industry put several CPU cores on one chip instead. That's why your laptop has many cores at a few GHz rather than one core at 20 GHz, and why parallel hardware like GPUs became the engine of modern AI.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>A transistor is a switch controlled by electricity. Series wiring gives AND; parallel gives OR.</li>
+    <li>Gates follow truth tables. Your language's <code>&amp;</code>, <code>|</code>, <code>^</code>, and <code>~</code> are gates applied to every bit at once.</li>
+    <li>NAND alone can build every other gate. De Morgan: negate the parts and swap AND with OR.</li>
+    <li>Sum is XOR, carry is AND. Chain full adders to add whole numbers.</li>
+    <li>Subtract by flipping B with XOR and setting the carry-in to 1.</li>
+    <li>The ALU computes and sets flags (Z, N, C, V) that comparisons and branches use.</li>
+    <li>Feedback loops store bits; registers save new values only when the clock ticks.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>Build everything from one function, <code>nand</code>, and check the 4-bit adder:</p>
+  <pre><code>def nand(a, b): return 1 - (a &amp; b)
+def not_(a):    return nand(a, a)
+def and_(a, b): return not_(nand(a, b))
+def or_(a, b):  return nand(not_(a), not_(b))
+def xor(a, b):  return and_(or_(a, b), nand(a, b))
+
+def full_adder(a, b, c):
+    s1 = xor(a, b)
+    return xor(s1, c), or_(and_(a, b), and_(s1, c))   # (sum, carry)
+
+def add4(a, b):   # bit lists, least significant bit first
+    carry, out = 0, []
+    for x, y in zip(a, b):
+        s, carry = full_adder(x, y, carry)
+        out.append(s)
+    return out, carry
+
+&gt;&gt;&gt; add4([1, 1, 0, 1], [0, 1, 1, 0])   # 11 + 6
+([1, 0, 0, 0], 1)                        # 0001 with carry out: 17</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 2</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="gates">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>How a program actually runs</strong>, where the control unit fetches instructions from memory and you step through a tiny program one tick at a time.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.nand2tetris.org/" target="_blank" rel="noopener">Nand2Tetris</a><span>Projects 1 to 3 have you build every gate from NAND, then an adder, an ALU, and registers, in a simulator. The closest match to this lesson.</span></li>
+      <li><a href="https://nandgame.com/" target="_blank" rel="noopener">NandGame</a><span>A free browser puzzle game based on the same idea: start from NAND and build up to a working computer.</span></li>
+      <li><a href="https://cs61c.org/" target="_blank" rel="noopener">Berkeley CS61C: Great Ideas in Computer Architecture</a><span>Its digital logic lectures cover gates, state elements, and how a CPU's datapath is wired.</span></li>
+      <li><a href="https://ocw.mit.edu/courses/6-004-computation-structures-spring-2017/" target="_blank" rel="noopener">MIT 6.004: Computation Structures (OpenCourseWare)</a><span>From transistors (CMOS) through logic, sequential circuits, and processor design. Full lecture videos.</span></li>
+      <li><a href="https://eater.net/8bit" target="_blank" rel="noopener">Ben Eater: Build an 8-bit computer</a><span>A video series building a working computer on breadboards, one register and adder at a time.</span></li>
+      <li><a href="https://www.charlespetzold.com/code/" target="_blank" rel="noopener">Code, by Charles Petzold</a><span>A book that goes from flashlights and relays to a full computer, written for anyone. A great read alongside this stage.</span></li>
+      <li><a href="https://circuitverse.org/" target="_blank" rel="noopener">CircuitVerse</a><span>A free online simulator for wiring your own gates and adders.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/NAND_logic" target="_blank" rel="noopener">NAND logic (Wikipedia)</a><span>Every gate built from NAND, with diagrams.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Adder_(electronics)" target="_blank" rel="noopener">Adder (Wikipedia)</a><span>Half adders, full adders, ripple carry, and carry-lookahead in more depth.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Flip-flop_%28electronics%29" target="_blank" rel="noopener">Flip-flop (Wikipedia)</a><span>How latches and flip-flops store a bit, with circuit diagrams and timing.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Pentium_FDIV_bug" target="_blank" rel="noopener">Pentium FDIV bug (Wikipedia)</a><span>The full story of the division bug and Intel's response.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Dennard_scaling" target="_blank" rel="noopener">Dennard scaling (Wikipedia)</a><span>Why clock speeds stalled in the mid-2000s and the industry turned to multiple cores.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Shared helpers for this lesson's circuits.
+  const GATES = {
+    AND:  { sym: 'g-and',  tip: 85, f: (a, b) => a & b,       formula: 'A · B: 1 only when both inputs are 1' },
+    OR:   { sym: 'g-or',   tip: 88, f: (a, b) => a | b,       formula: 'A + B: 1 when at least one input is 1' },
+    NOT:  { sym: 'g-not',  tip: 84, f: a => 1 - a, one: true, formula: '¬A: flips the input' },
+    NAND: { sym: 'g-nand', tip: 95, f: (a, b) => 1 - (a & b), formula: '¬(A · B): 0 only when both inputs are 1' },
+    NOR:  { sym: 'g-nor',  tip: 98, f: (a, b) => 1 - (a | b), formula: '¬(A + B): 1 only when both inputs are 0' },
+    XOR:  { sym: 'g-xor',  tip: 88, f: (a, b) => a ^ b,       formula: 'A ⊕ B: 1 when the inputs differ' },
+  };
+  // A wire path; "on" wires get an ink outline under a highlighter stroke.
+  const wire = (d, on) => (on ? `<path class="wire-under" d="${d}"/>` : '') + `<path class="wire${on ? ' on' : ''}" d="${d}"/>`;
+  const gate = (type, x, y) => `<use href="#${GATES[type].sym}" x="${x}" y="${y}" width="120" height="80"/>`;
+
+  // Row of 0/1 toggle buttons. Returns a getter for the value (leftmost = most significant).
+  function bitToggles(host, n, label, onChange, initial = 0) {
+    const btns = [];
+    for (let i = n - 1; i >= 0; i--) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'mini';
+      const on = !!(initial & (1 << i));
+      b.setAttribute('aria-pressed', on); b.textContent = on ? 1 : 0;
+      b.setAttribute('aria-label', `${label} bit worth ${1 << i}`);
+      b.onclick = () => { const v = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', v); b.textContent = v ? 1 : 0; onChange(); };
+      host.append(b); btns.push(b);
+    }
+    return () => btns.reduce((v, b) => (v << 1) | (b.getAttribute('aria-pressed') === 'true' ? 1 : 0), 0);
+  }
+  function labeledToggles(host, n, label, onChange, initial) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `<span>${label}</span>`;
+    const row = document.createElement('span'); row.className = 'bits-row';
+    wrap.append(row); host.append(wrap);
+    return bitToggles(row, n, label, onChange, initial);
+  }
+  const bin = (v, n) => v.toString(2).padStart(n, '0');
+  const signed4 = v => (v & 8 ? v - 16 : v);
+  const fmt = n => String(n).replace('-', '−');
+
+  // Gate bench
+  (function () {
+    let type = 'AND';
+    const picker = document.getElementById('picker');
+    const inputs = document.getElementById('bench-inputs');
+    let getA, getB;
+    Object.keys(GATES).forEach(t => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = t; b.setAttribute('aria-pressed', t === type);
+      b.onclick = () => { type = t; [...picker.children].forEach(c => c.setAttribute('aria-pressed', c === b)); render(); };
+      picker.append(b);
+    });
+    const rowA = document.createElement('label'), rowB = document.createElement('label');
+    rowA.innerHTML = 'A '; rowB.innerHTML = 'B ';
+    inputs.append(rowA, rowB);
+    getA = bitToggles(rowA, 1, 'Input A', () => { UI.flag('flipped'); render(); });
+    getB = bitToggles(rowB, 1, 'Input B', () => { UI.flag('flipped'); render(); });
+
+    function render() {
+      const g = GATES[type], a = getA(), b = getB();
+      const out = g.one ? g.f(a) : g.f(a, b);
+      rowB.style.visibility = g.one ? 'hidden' : '';
+      document.getElementById('bench-svg').innerHTML =
+        (g.one ? wire('M0,40 H36', a) : wire('M0,25 H36', a) + wire('M0,55 H36', b)) +
+        gate(type, 0, 0) + wire(`M${g.tip},40 H166`, out) +
+        `<circle cx="182" cy="40" r="13" class="lamp${out ? ' on' : ''}"/>`;
+      const rows = g.one ? [[0], [1]] : [[0, 0], [0, 1], [1, 0], [1, 1]];
+      document.getElementById('bench-truth').innerHTML =
+        `<thead><tr>${g.one ? '<th>A</th>' : '<th>A</th><th>B</th>'}<th>Out</th></tr></thead><tbody>` +
+        rows.map(r => {
+          const o = g.one ? g.f(r[0]) : g.f(r[0], r[1]);
+          const now = g.one ? r[0] === a : r[0] === a && r[1] === b;
+          return `<tr class="${now ? 'now' : ''}">${r.map(x => `<td>${x}</td>`).join('')}<td>${o}</td></tr>`;
+        }).join('') + '</tbody>';
+      document.getElementById('bench-formula').textContent = `${type} = ${g.formula}. Output right now: ${out}.`;
+    }
+    render();
+  })();
+
+  // Half adder: A and B each branch to an XOR (sum) and an AND (carry).
+  (function () {
+    const host = document.getElementById('ha-inputs');
+    const getA = labeledToggles(host, 1, 'A', render), getB = labeledToggles(host, 1, 'B', render);
+    function render() {
+      const a = getA(), b = getB(), s = a ^ b, c = a & b;
+      document.getElementById('ha-svg').innerHTML =
+        wire('M40,50 H120 M120,35 V135 M120,35 H206 M120,135 H206', a) +
+        wire('M40,150 H140 M140,65 V165 M140,65 H206 M140,165 H206', b) +
+        `<circle cx="120" cy="50" r="4" class="dot"/><circle cx="140" cy="150" r="4" class="dot"/>` +
+        gate('XOR', 170, 10) + gate('AND', 170, 110) +
+        wire('M258,50 H318', s) + wire('M255,150 H318', c) +
+        `<circle cx="334" cy="50" r="13" class="lamp${s ? ' on' : ''}"/><circle cx="334" cy="150" r="13" class="lamp${c ? ' on' : ''}"/>` +
+        `<text x="14" y="55" class="glabel">A</text><text x="14" y="155" class="glabel">B</text>` +
+        `<text x="354" y="55" class="glabel">Sum</text><text x="354" y="155" class="glabel">Carry</text>`;
+      document.getElementById('ha-read').textContent = `${a} + ${b} = ${a + b}, which is ${c}${s} in binary: carry ${c}, sum ${s}.`;
+    }
+    render();
+  })();
+
+  // Ripple-carry adder: four full adders, bit 0 on the right, carries flowing left.
+  (function () {
+    const host = document.getElementById('rc-inputs');
+    const getA = labeledToggles(host, 4, 'A', render, 0b0111), getB = labeledToggles(host, 4, 'B', render, 0b0001);
+    function render() {
+      const a = getA(), b = getB();
+      let carry = 0, svg = '';
+      const xs = i => 430 - i * 130; // left edge of adder i
+      svg += wire('M556,90 H520', 0) + `<text x="560" y="94" class="gsmall">0</text>`;
+      for (let i = 0; i < 4; i++) {
+        const ai = (a >> i) & 1, bi = (b >> i) & 1, cin = carry;
+        const s = ai ^ bi ^ cin;
+        carry = (ai & bi) | ((ai ^ bi) & cin);
+        const x = xs(i);
+        svg += wire(`M${x + 30},30 V60`, ai) + wire(`M${x + 60},30 V60`, bi) + wire(`M${x + 45},120 V148`, s);
+        svg += `<rect x="${x}" y="60" width="90" height="60" rx="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.5"/>`;
+        svg += `<text x="${x + 45}" y="96" class="glabel" text-anchor="middle">FA ${i}</text>`;
+        svg += `<text x="${x + 30}" y="22" class="gsmall" text-anchor="middle">A${i}=${ai}</text><text x="${x + 62}" y="22" class="gsmall" text-anchor="middle">B${i}=${bi}</text>`;
+        svg += `<text x="${x + 45}" y="168" class="glabel" text-anchor="middle">S${i}=${s}</text>`;
+        svg += wire(`M${x},90 H${x - 40}`, carry);
+      }
+      svg += `<text x="4" y="80" class="gsmall">carry</text><text x="4" y="112" class="gsmall">out: ${carry}</text>`;
+      document.getElementById('rc-svg').innerHTML = svg;
+      const sum = (a + b) & 15;
+      document.getElementById('rc-read').textContent =
+        `${bin(a, 4)} + ${bin(b, 4)} = ${bin(sum, 4)}  (${a} + ${b} = ${a + b}${carry ? `; the 4 sum bits show ${sum} and the carry out holds the 16` : ''})`;
+    }
+    render();
+  })();
+
+  // ALU: A op B with Z, N, C, V flags.
+  (function () {
+    const OPS = {
+      'A + B':   (a, b) => { const r = a + b; return { r: r & 15, c: r > 15, v: !!((a ^ r) & (b ^ r) & 8) }; },
+      'A − B':   (a, b) => { const r = a + (~b & 15) + 1; return { r: r & 15, c: r > 15, v: !!((a ^ b) & (a ^ r) & 8) }; },
+      'A AND B': (a, b) => ({ r: a & b, c: false, v: false }),
+      'A OR B':  (a, b) => ({ r: a | b, c: false, v: false }),
+      'A XOR B': (a, b) => ({ r: a ^ b, c: false, v: false }),
+    };
+    let op = 'A + B';
+    const host = document.getElementById('alu-inputs');
+    const getA = labeledToggles(host, 4, 'A', render, 0b0110), getB = labeledToggles(host, 4, 'B', render, 0b0011);
+    const opsHost = document.getElementById('alu-ops');
+    Object.keys(OPS).forEach(k => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = k; b.setAttribute('aria-pressed', k === op);
+      b.onclick = () => { op = k; [...opsHost.children].forEach(c => c.setAttribute('aria-pressed', c === b)); render(); };
+      opsHost.append(b);
+    });
+    function render() {
+      const a = getA(), b = getB(), { r, c, v } = OPS[op](a, b);
+      const flags = { Z: r === 0, N: !!(r & 8), C: c, V: v };
+      const names = { Z: 'zero', N: 'negative', C: 'carry', V: 'overflow' };
+      document.getElementById('alu-read').textContent =
+        `${op.replace('A', bin(a, 4)).replace('B', bin(b, 4))} = ${bin(r, 4)}   unsigned: ${r}   signed: ${fmt(signed4(r))}`;
+      document.getElementById('alu-flags').innerHTML = Object.entries(flags)
+        .map(([k, on]) => `<div class="flag${on ? ' set' : ''}"><b>${k} = ${on ? 1 : 0}</b>${names[k]}</div>`).join('');
+      const notes = [];
+      if (flags.Z) notes.push('Z: the result is zero.');
+      if (flags.N) notes.push('N: the top bit is 1, so as a signed number it is negative.');
+      if (flags.C) notes.push(op === 'A − B' ? 'C: a carry came out of the top bit. In subtraction this means no borrow was needed (A ≥ B unsigned).' : 'C: the unsigned result needed a fifth bit.');
+      if (flags.V) notes.push(`V: signed overflow. ${fmt(signed4(a))} ${op.includes('+') ? '+' : '−'} ${fmt(signed4(b))} doesn't fit in −8 to 7.`);
+      document.getElementById('alu-note').textContent = notes.join(' ') || 'No flags set.';
+    }
+    render();
+  })();
+
+  // Register: output only follows input on a clock tick.
+  (function () {
+    let stored = 0, ticks = 0;
+    const getIn = bitToggles(document.getElementById('reg-in'), 4, 'Data in', () => {
+      const pending = getIn() !== stored;
+      document.getElementById('reg-ticks').textContent = pending
+        ? `Data in is ${bin(getIn(), 4)}, but the register still holds ${bin(stored, 4)} until the next tick.`
+        : `Data in matches the stored value.`;
+    });
+    document.getElementById('reg-tick').onclick = () => {
+      stored = getIn(); ticks++;
+      const out = document.getElementById('reg-out');
+      out.textContent = bin(stored, 4);
+      out.classList.remove('flash'); void out.offsetWidth; out.classList.add('flash');
+      document.getElementById('reg-ticks').textContent = `Tick ${ticks}: saved ${bin(stored, 4)}.`;
+    };
+  })();
+</script>
+</body>
+</html>
