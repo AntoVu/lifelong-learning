@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bits, bytes, and how everything becomes a number | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  /* Bit lab: the lesson's centerpiece */
+  .bitlab { padding: 1.5rem; }
+  .switches { display: grid; grid-template-columns: repeat(8, 1fr); gap: .5rem; max-width: 560px; }
+  .switches .gap { display: none; }
+  .sw { display: grid; justify-items: center; gap: .35rem; background: none; border: 0; padding: 0; cursor: pointer; color: var(--ink); font-family: var(--sans); }
+  .sw .w { font-size: .8rem; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .sw .track { width: 100%; max-width: 54px; height: 84px; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper); position: relative; transition: background .12s; }
+  .sw .knob { position: absolute; left: 5px; right: 5px; height: 34px; bottom: 5px; border-radius: 6px; background: var(--ink); transition: bottom .12s; }
+  .sw[aria-pressed="true"] .track { background: var(--hl); }
+  .sw[aria-pressed="true"] .knob { bottom: 41px; }
+  .sw .v { font: 600 1.25rem var(--mono); }
+  .sw.signbit .w { color: var(--bad); }
+  .sum { font: 1rem var(--mono); margin: 1rem 0 .4rem; min-height: 1.5em; overflow-wrap: anywhere; }
+  .readouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .6rem 1.2rem; margin: 1rem 0; }
+  .readouts div { border-top: 2px solid var(--ink); padding-top: .35rem; }
+  .readouts dt { font: .82rem var(--sans); color: var(--ink-2); }
+  .readouts dd { margin: 0; font: 600 1.35rem var(--mono); font-variant-numeric: tabular-nums; }
+  .controls { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; font: .95rem var(--sans); }
+  .controls label { display: flex; gap: .4rem; align-items: center; margin-left: .4rem; cursor: pointer; }
+  .controls input { width: 18px; height: 18px; accent-color: var(--ink); }
+
+  .place { display: grid; grid-template-columns: auto repeat(4, minmax(56px, 72px)) auto; gap: 0; font: 1rem var(--mono); text-align: center; margin: 1.2rem 0; overflow-x: auto; }
+  .place > * { padding: .4rem .3rem; border-bottom: 1px solid var(--rule); }
+  .place .h { font: 600 .82rem var(--sans); color: var(--ink-2); text-align: left; }
+  .place .d { font-size: 1.4rem; font-weight: 600; }
+  .place .eq { text-align: left; padding-left: 1rem; color: var(--ink-2); }
+
+  .hexgrid { display: grid; grid-template-columns: repeat(8, 1fr); border: 1.5px solid var(--ink); border-radius: 8px; overflow: hidden; font: .9rem var(--mono); margin: 1rem 0 1.5rem; background: var(--panel); }
+  .hexgrid span { padding: .45rem .2rem; text-align: center; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .hexgrid b { display: block; font-size: 1.1rem; }
+  @media (max-width: 600px) { .hexgrid { grid-template-columns: repeat(4, 1fr); } }
+
+  svg text { font-family: var(--sans); fill: var(--ink); }
+  .wheel .pos { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+  .wheel .neg { fill: var(--bad-bg); stroke: var(--bad); stroke-width: 1.5; }
+  .wheel .val { font: 700 13px var(--sans); text-anchor: middle; }
+  .wheel .bits { font: 12px var(--mono); text-anchor: middle; fill: var(--ink-2); }
+
+  .utf8 input, .floatlab input { font: 1.05rem var(--mono); padding: .5em .7em; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); width: 100%; max-width: 26rem; }
+  .utf8 td, .utf8 th { font-family: var(--mono); font-size: .92rem; }
+  .utf8 td.ch { font-size: 1.3rem; font-family: var(--serif); }
+  .counts { display: flex; flex-wrap: wrap; gap: .5rem 1.6rem; font: .95rem var(--sans); margin-top: .5rem; }
+  .counts b { font-family: var(--mono); font-size: 1.1rem; }
+  .bitpat { font-family: var(--mono); letter-spacing: .05em; }
+  .bitpat i { font-style: normal; color: var(--bad); font-weight: 600; }
+
+  .floatlab .row { display: flex; gap: .8rem; flex-wrap: wrap; align-items: end; font: .9rem var(--sans); }
+  .floatlab label { display: grid; gap: .25rem; flex: 1 1 8rem; color: var(--ink-2); }
+  .floatlab output { display: block; font: 1rem var(--mono); margin-top: .9rem; overflow-wrap: anywhere; line-height: 1.8; }
+  .verdict { font: 600 1rem var(--sans); }
+  .verdict.no { color: var(--bad); }
+  .verdict.yes { color: var(--good); }
+
+  pre { font: .9rem/1.6 var(--mono); background: var(--code-bg); padding: 1rem 1.2rem; border-radius: 8px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  .story { margin: 1.4rem 0; }
+  .story h3 { margin: 0 0 .3rem; font-size: 1.05rem; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 1: How computers work, lesson 1 of 5</div>
+    <h1>Bits, bytes, and how everything becomes a number</h1>
+    <p class="lede">Every photo, song, message, and program on your computer is stored as a long row of switches that are either on or off. This lesson shows how a row of switches can mean a number, a negative number, a letter, or a fraction.</p>
+  </header>
+
+  <section class="panel bitlab" aria-labelledby="lab-title">
+    <h2 id="lab-title" style="margin-top:0;font-size:1.25rem">Eight switches, one byte</h2>
+    <div class="try">Click the switches. Each one doubles the value of the one to its right.</div>
+    <div class="switches" id="switches" role="group" aria-label="Eight bits, most significant first"></div>
+    <p class="sum" id="sum" aria-live="polite"></p>
+    <dl class="readouts">
+      <div><dt>Binary</dt><dd id="r-bin"></dd></div>
+      <div><dt id="r-dec-label">Decimal</dt><dd id="r-dec"></dd></div>
+      <div><dt>Hexadecimal</dt><dd id="r-hex"></dd></div>
+      <div><dt>As an ASCII letter</dt><dd id="r-chr"></dd></div>
+    </dl>
+    <div class="controls">
+      <button class="btn quiet" type="button" id="dec">Subtract 1</button>
+      <button class="btn quiet" type="button" id="inc">Add 1</button>
+      <button class="btn quiet" type="button" id="clear">Clear</button>
+      <label><input type="checkbox" id="signed"> Read the leftmost bit as −128</label>
+    </div>
+  </section>
+  <p>You'll come back to this panel as the lesson goes. By the end, every readout on it will make sense.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain why computers use two states instead of ten.</li>
+      <li>Convert between binary, decimal, and hexadecimal by hand.</li>
+      <li>Work out how many values fit in a given number of bits, and what happens when you run out.</li>
+      <li>Store negative numbers with two's complement and explain why hardware prefers it.</li>
+      <li>Describe how text becomes bytes with ASCII, Unicode, and UTF-8.</li>
+      <li>Explain why <code>0.1 + 0.2</code> isn't <code>0.3</code>, and what to do about it.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#why-two">Why only two states?</a></li>
+      <li><a href="#place-value">Place value in base 2</a></li>
+      <li><a href="#limits">How much fits, and overflow</a></li>
+      <li><a href="#hex">Hexadecimal</a></li>
+      <li><a href="#negative">Negative numbers</a></li>
+      <li><a href="#text">Text: ASCII, Unicode, UTF-8</a></li>
+      <li><a href="#floats">Fractions and floating point</a></li>
+      <li><a href="#stakes">When this goes wrong</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="why-two">Why only two states?</h2>
+  <p>Inside a chip, information is electricity. A wire carries a voltage, and the hardware reads it. You could try to use ten voltage levels to store the digits 0 to 9 directly, but real signals are noisy: heat, interference, and tiny manufacturing differences push the voltage around. With ten levels packed close together, a little noise turns a 6 into a 7.</p>
+  <p>With only two levels, there's a wide safety margin. Anything above a threshold is a <strong>1</strong> and anything below it is a <strong>0</strong>. The signal can wobble a lot and still be read correctly.</p>
+
+  <figure class="figure">
+    <svg viewBox="0 0 660 215" role="img" aria-labelledby="sig-t">
+      <title id="sig-t">A noisy voltage signal over time. It wobbles, but it always stays clearly above or below a threshold line, so it reads as 1 0 1 1 0.</title>
+      <rect x="40" y="28" width="600" height="52" fill="var(--hl)" opacity=".35"/>
+      <rect x="40" y="122" width="600" height="52" fill="var(--rule)" opacity=".5"/>
+      <line x1="40" y1="101" x2="640" y2="101" stroke="var(--pencil)" stroke-width="1.5" stroke-dasharray="6 5"/>
+      <text x="636" y="95" text-anchor="end" font-size="12" fill="var(--ink-2)">threshold</text>
+      <text x="34" y="58" text-anchor="end" font-size="13">high</text>
+      <text x="34" y="152" text-anchor="end" font-size="13">low</text>
+      <path d="M40,58 L55,52 L70,61 L85,49 L100,56 L115,63 L130,50 L145,57 L158,55 L166,140 L180,148 L195,141 L210,153 L225,144 L240,151 L255,139 L270,147 L278,146 L286,60 L300,53 L315,62 L330,48 L345,57 L360,51 L375,60 L390,54 L405,59 L420,47 L435,56 L450,62 L465,50 L480,58 L495,53 L510,60 L518,56 L526,142 L540,150 L555,139 L570,152 L585,145 L600,141 L615,149 L630,144" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linejoin="round"/>
+      <g font-family="var(--mono)" font-size="22" font-weight="700" text-anchor="middle">
+        <text x="100" y="205">1</text><text x="220" y="205">0</text><text x="340" y="205">1</text><text x="460" y="205">1</text><text x="580" y="205">0</text>
+      </g>
+    </svg>
+    <figcaption>The line wobbles, but it never comes near the threshold, so the reading is always clear: 1, 0, 1, 1, 0.</figcaption>
+  </figure>
+
+  <p>One on/off value is a <span class="hl">bit</span> (short for binary digit). Eight bits make a <span class="hl">byte</span>, the smallest chunk most computers can address in memory. Everything else in this lesson is about agreeing on what a pattern of bits <em>means</em>. The bits themselves don't know if they're a number, a letter, or a pixel. The program decides.</p>
+
+  <!-- 2 -->
+  <h2 id="place-value">Place value in base 2</h2>
+  <p>You already know how base 10 works, even if you never think about it. In <code>407</code>, each column is worth ten times the column to its right:</p>
+
+  <div class="place" role="table" aria-label="Place value of 407 in base 10 and 1011 in base 2">
+    <span class="h" role="cell">Column worth</span><span role="cell">1000</span><span role="cell">100</span><span role="cell">10</span><span role="cell">1</span><span role="cell"></span>
+    <span class="h" role="cell">Base 10</span><span class="d" role="cell">0</span><span class="d" role="cell">4</span><span class="d" role="cell">0</span><span class="d" role="cell">7</span><span class="eq" role="cell">4×100 + 7×1 = 407</span>
+    <span class="h" role="cell">Column worth</span><span role="cell">8</span><span role="cell">4</span><span role="cell">2</span><span role="cell">1</span><span role="cell"></span>
+    <span class="h" role="cell">Base 2</span><span class="d" role="cell">1</span><span class="d" role="cell">0</span><span class="d" role="cell">1</span><span class="d" role="cell">1</span><span class="eq" role="cell">8 + 2 + 1 = 11</span>
+  </div>
+
+  <p>Binary is the same idea with only two digits, so each column is worth <strong>twice</strong> the one to its right: 1, 2, 4, 8, 16, 32, 64, 128. To read a binary number, add up the column values wherever there's a 1. That's exactly what the sum line on the switch panel does.</p>
+
+  <h3>Decimal to binary</h3>
+  <p>To go the other way, take the largest power of two that fits, subtract it, and repeat with what's left. For 45:</p>
+  <ul>
+    <li>32 fits, leaving 13. Put a 1 in the 32 column.</li>
+    <li>16 doesn't fit in 13. Put a 0 there.</li>
+    <li>8 fits, leaving 5. Then 4 fits, leaving 1. 2 doesn't fit. 1 fits, leaving 0.</li>
+  </ul>
+  <p>Reading the columns from 32 down to 1 gives <code>101101</code>. Check it: 32 + 8 + 4 + 1 = 45.</p>
+
+  <div class="problem" data-id="bits-p1" data-answer="182">
+    <span class="qtag">Practice 1</span>
+    <p class="q">What is <code>10110110</code> in decimal?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Write the column values 128, 64, 32, 16, 8, 4, 2, 1 over the bits and add up the ones under a 1. You can also set the switches on the panel above.</details>
+    <div class="solution" hidden><p>128 + 32 + 16 + 4 + 2 = <strong>182</strong>.</p></div>
+  </div>
+
+  <div class="problem" data-id="bits-p2" data-answer="101101|00101101">
+    <span class="qtag">Practice 2</span>
+    <p class="q">Write 45 in binary.</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The largest power of two that fits in 45 is 32. Subtract it and keep going.</details>
+    <div class="solution" hidden><p>45 = 32 + 8 + 4 + 1, so it's <strong>101101</strong> (or <code>00101101</code> as a full byte). Leading zeros don't change the value, just like <code>007</code> is still 7.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="limits">How much fits, and overflow</h2>
+  <p>Each extra bit doubles the number of patterns. One bit has 2 patterns, two bits have 4, three have 8. In general, <strong>n bits give 2<sup>n</sup> patterns</strong>. If you use them for counting from zero, the largest value is 2<sup>n</sup> − 1, because zero takes one of the patterns.</p>
+
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Bits</th><th class="num">Patterns</th><th class="num">Unsigned range</th><th>Where you'll meet it</th></tr></thead>
+    <tbody>
+      <tr><td>4</td><td class="num">16</td><td class="num">0 to 15</td><td>One hex digit (a "nibble")</td></tr>
+      <tr><td>8</td><td class="num">256</td><td class="num">0 to 255</td><td>A byte; one color channel in RGB</td></tr>
+      <tr><td>16</td><td class="num">65,536</td><td class="num">0 to 65,535</td><td>Network port numbers</td></tr>
+      <tr><td>32</td><td class="num">about 4.3 billion</td><td class="num">0 to 4,294,967,295</td><td>IPv4 addresses; <code>int</code> in many languages</td></tr>
+      <tr><td>64</td><td class="num">about 1.8 × 10<sup>19</sup></td><td class="num">0 to 18,446,744,073,709,551,615</td><td>Integers and memory addresses on modern machines</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p class="callout">A handy shortcut: 2<sup>10</sup> = 1,024, which is close to 1,000. So 2<sup>20</sup> is about a million, 2<sup>30</sup> about a billion, and 2<sup>32</sup> is 4 × 2<sup>30</sup>, about 4 billion.</p>
+
+  <p>What happens when you're at the largest value and add 1? Set all eight switches on the panel to 1 (that's 255), then press <span class="hl">Add 1</span>. Like a car odometer rolling from 999,999 to 000,000, the bits all carry over and the extra 1 falls off the left end. This is <span class="hl">overflow</span>, and the value <em>wraps around</em> to 0.</p>
+
+  <div class="mcq" data-id="bits-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">An 8-bit unsigned counter holds 255. A program adds 1 to it. On typical hardware, what does the counter hold afterward?</p>
+    <div class="choices">
+      <button type="button" data-why="256 needs 9 bits (100000000). Only 8 fit, so the ninth is lost.">256</button>
+      <button type="button">0</button>
+      <button type="button" data-why="The hardware doesn't refuse to add. It carries through every bit.">255, unchanged</button>
+      <button type="button" data-why="The leftmost bit doesn't flip alone. Every bit carries.">128</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><code>11111111 + 1 = 1 00000000</code>. The ninth bit doesn't fit, so the byte holds <strong>0</strong>. Languages handle this differently: unsigned math in C wraps silently, Rust panics in debug builds, and Python's integers simply grow to as many bits as they need. Knowing which one you're using matters.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="hex">Hexadecimal</h2>
+  <p>Long rows of 1s and 0s are hard for people to read. <span class="hl">Hexadecimal</span> (base 16) fixes this. Four bits have exactly 16 patterns, so each group of four bits maps to one hex digit. Hex needs 16 digits, so after 0 to 9 it borrows the letters A to F.</p>
+
+  <div class="hexgrid" aria-label="Every 4-bit pattern and its hex digit">
+    <span><b>0</b>0000</span><span><b>1</b>0001</span><span><b>2</b>0010</span><span><b>3</b>0011</span><span><b>4</b>0100</span><span><b>5</b>0101</span><span><b>6</b>0110</span><span><b>7</b>0111</span>
+    <span><b>8</b>1000</span><span><b>9</b>1001</span><span><b>A</b>1010</span><span><b>B</b>1011</span><span><b>C</b>1100</span><span><b>D</b>1101</span><span><b>E</b>1110</span><span><b>F</b>1111</span>
+  </div>
+
+  <figure class="figure">
+    <svg viewBox="0 0 520 160" role="img" aria-labelledby="nib-t">
+      <title id="nib-t">The byte 1011 0110 splits into two groups of four bits. 1011 is B and 0110 is 6, so the byte is 0xB6.</title>
+      <g font-family="var(--mono)" font-size="22" font-weight="600" text-anchor="middle">
+        <g fill="none" stroke="var(--ink)" stroke-width="1.5">
+          <rect x="40" y="20" width="40" height="44" rx="4"/><rect x="80" y="20" width="40" height="44" rx="4"/><rect x="120" y="20" width="40" height="44" rx="4"/><rect x="160" y="20" width="40" height="44" rx="4"/>
+          <rect x="240" y="20" width="40" height="44" rx="4"/><rect x="280" y="20" width="40" height="44" rx="4"/><rect x="320" y="20" width="40" height="44" rx="4"/><rect x="360" y="20" width="40" height="44" rx="4"/>
+        </g>
+        <text x="60" y="50">1</text><text x="100" y="50">0</text><text x="140" y="50">1</text><text x="180" y="50">1</text>
+        <text x="260" y="50">0</text><text x="300" y="50">1</text><text x="340" y="50">1</text><text x="380" y="50">0</text>
+      </g>
+      <path d="M44,76 v8 h152 v-8 M120,84 v20" fill="none" stroke="var(--ink)" stroke-width="2"/>
+      <path d="M244,76 v8 h152 v-8 M320,84 v20" fill="none" stroke="var(--ink)" stroke-width="2"/>
+      <rect x="98" y="108" width="44" height="40" rx="6" fill="var(--hl)" stroke="var(--ink)" stroke-width="2"/>
+      <rect x="298" y="108" width="44" height="40" rx="6" fill="var(--hl)" stroke="var(--ink)" stroke-width="2"/>
+      <g font-family="var(--mono)" font-size="24" font-weight="700" text-anchor="middle" fill="var(--hl-ink)"><text x="120" y="136" fill="#1b2a41">B</text><text x="320" y="136" fill="#1b2a41">6</text></g>
+      <text x="440" y="136" font-family="var(--mono)" font-size="22" font-weight="700">= 0xB6</text>
+    </svg>
+    <figcaption>Split a byte into two groups of four and translate each group on its own. No arithmetic needed.</figcaption>
+  </figure>
+
+  <p>Code marks hex with a <code>0x</code> prefix so it isn't mistaken for decimal: <code>0xB6</code> is 182. You'll see hex everywhere: memory addresses in a debugger, Git commit hashes, and colors in CSS. The highlighter yellow on this page is <code>#F6E15A</code>, which is three bytes: red <code>F6</code> (246), green <code>E1</code> (225), and blue <code>5A</code> (90).</p>
+  <p>To convert hex to decimal, use place value with 16s: <code>0x2F</code> = 2 × 16 + 15.</p>
+
+  <div class="problem" data-id="bits-p3" data-answer="47">
+    <span class="qtag">Practice 3</span>
+    <p class="q">What is <code>0x2F</code> in decimal?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>F is 15. The left digit is in the 16s column.</details>
+    <div class="solution" hidden><p>2 × 16 + 15 = <strong>47</strong>.</p></div>
+  </div>
+
+  <div class="problem" data-id="bits-p4" data-answer="d3|0xd3">
+    <span class="qtag">Practice 4</span>
+    <p class="q">Write <code>11010011</code> in hex.</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off" spellcheck="false"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Split it into <code>1101</code> and <code>0011</code>, then look each one up in the table.</details>
+    <div class="solution" hidden><p><code>1101</code> is D and <code>0011</code> is 3, so it's <strong>0xD3</strong> (211 in decimal).</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="negative">Negative numbers</h2>
+  <p>So far every pattern meant a value of zero or more. To store negative numbers, we need to give some patterns a negative meaning. The obvious idea is to use the leftmost bit as a sign (0 for plus, 1 for minus), but that has two problems. It produces two zeros (<code>+0</code> and <code>−0</code>), and the adder circuit needs special cases for signs.</p>
+  <p>Almost every computer instead uses <span class="hl">two's complement</span>. The rule is small: <strong>the leftmost bit's column is worth negative its usual value</strong>. In a byte, that column is worth −128 instead of 128. Everything else is unchanged.</p>
+  <p>Tick <span class="hl">Read the leftmost bit as −128</span> on the switch panel and try a few patterns. <code>10000000</code> becomes −128, the most negative value. <code>11111111</code> becomes −128 + 127 = −1. A byte now covers −128 to 127: still 256 values, just shifted.</p>
+
+  <figure class="figure">
+    <svg class="wheel" viewBox="0 0 420 420" role="img" aria-labelledby="wheel-t" style="max-width:420px;display:block;margin:0 auto">
+      <title id="wheel-t">The 16 patterns of 4 bits arranged in a circle. Counting clockwise from 0000, values go 0 to 7. The next pattern, 1000, is −8, and values rise to −1 at 1111, which wraps back to 0.</title>
+      <circle cx="210" cy="210" r="128" fill="none" stroke="var(--rule)" stroke-width="10"/>
+      <line x1="229.5" y1="308.1" x2="240.4" y2="363" stroke="var(--bad)" stroke-width="3"/>
+      <circle cx="210.0" cy="82.0" r="17" class="pos"/><text x="210.0" y="87.0" class="val">0</text><text x="210.0" y="38.0" class="bits">0000</text>
+      <circle cx="259.0" cy="91.7" r="17" class="pos"/><text x="259.0" y="96.7" class="val">1</text><text x="277.4" y="51.4" class="bits">0001</text>
+      <circle cx="300.5" cy="119.5" r="17" class="pos"/><text x="300.5" y="124.5" class="val">2</text><text x="334.5" y="89.5" class="bits">0010</text>
+      <circle cx="328.3" cy="161.0" r="17" class="pos"/><text x="328.3" y="166.0" class="val">3</text><text x="372.6" y="146.6" class="bits">0011</text>
+      <circle cx="338.0" cy="210.0" r="17" class="pos"/><text x="338.0" y="215.0" class="val">4</text><text x="386.0" y="214.0" class="bits">0100</text>
+      <circle cx="328.3" cy="259.0" r="17" class="pos"/><text x="328.3" y="264.0" class="val">5</text><text x="372.6" y="281.4" class="bits">0101</text>
+      <circle cx="300.5" cy="300.5" r="17" class="pos"/><text x="300.5" y="305.5" class="val">6</text><text x="334.5" y="338.5" class="bits">0110</text>
+      <circle cx="259.0" cy="328.3" r="17" class="pos"/><text x="259.0" y="333.3" class="val">7</text><text x="277.4" y="376.6" class="bits">0111</text>
+      <circle cx="210.0" cy="338.0" r="17" class="neg"/><text x="210.0" y="343.0" class="val">−8</text><text x="210.0" y="390.0" class="bits">1000</text>
+      <circle cx="161.0" cy="328.3" r="17" class="neg"/><text x="161.0" y="333.3" class="val">−7</text><text x="142.6" y="376.6" class="bits">1001</text>
+      <circle cx="119.5" cy="300.5" r="17" class="neg"/><text x="119.5" y="305.5" class="val">−6</text><text x="85.5" y="338.5" class="bits">1010</text>
+      <circle cx="91.7" cy="259.0" r="17" class="neg"/><text x="91.7" y="264.0" class="val">−5</text><text x="47.4" y="281.4" class="bits">1011</text>
+      <circle cx="82.0" cy="210.0" r="17" class="neg"/><text x="82.0" y="215.0" class="val">−4</text><text x="34.0" y="214.0" class="bits">1100</text>
+      <circle cx="91.7" cy="161.0" r="17" class="neg"/><text x="91.7" y="166.0" class="val">−3</text><text x="47.4" y="146.6" class="bits">1101</text>
+      <circle cx="119.5" cy="119.5" r="17" class="neg"/><text x="119.5" y="124.5" class="val">−2</text><text x="85.5" y="89.5" class="bits">1110</text>
+      <circle cx="161.0" cy="91.7" r="17" class="neg"/><text x="161.0" y="96.7" class="val">−1</text><text x="142.6" y="51.4" class="bits">1111</text>
+      <text x="210" y="196" text-anchor="middle" font-size="14" font-weight="700">Adding 1 moves</text>
+      <text x="210" y="214" text-anchor="middle" font-size="14" font-weight="700">one step clockwise</text>
+      <text x="210" y="240" text-anchor="middle" font-size="12" fill="var(--bad)">Red line: 7 + 1 wraps to −8</text>
+    </svg>
+    <figcaption>Four bits as a clock. Going from −1 (<code>1111</code>) to 0 (<code>0000</code>) is just ordinary binary carrying, which is why the same adder circuit works for signed and unsigned numbers.</figcaption>
+  </figure>
+
+  <p>That wheel shows why hardware loves two's complement: <strong>adding is the same operation either way</strong>. The circuit just adds bits and doesn't care whether you meant them as signed. Only the place where you wrap around moves.</p>
+
+  <h3>Negating a number</h3>
+  <p>To get −x from x: <strong>flip every bit, then add 1</strong>. For −5:</p>
+  <pre><code>  5  =  00000101
+flip =  11111010
+ +1  =  11111011   ← this is −5</code></pre>
+  <p>Check it with the column values: −128 + 64 + 32 + 16 + 8 + 2 + 1 = −5.</p>
+
+  <div class="problem" data-id="bits-p5" data-answer="11101100">
+    <span class="qtag">Practice 5</span>
+    <p class="q">Write −20 as an 8-bit two's complement number.</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Write 20 as eight bits first (16 + 4), then flip every bit and add 1.</details>
+    <div class="solution" hidden><p>20 = <code>00010100</code>. Flip: <code>11101011</code>. Add 1: <strong>11101100</strong>. Check: −128 + 64 + 32 + 8 + 4 = −20.</p></div>
+  </div>
+
+  <div class="mcq" data-id="bits-q2" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">A signed 32-bit integer holds 2,147,483,647, its largest value. You add 1. What do you get on typical hardware?</p>
+    <div class="choices">
+      <button type="button" data-why="That needs a 33rd bit. The value has to wrap somewhere.">2,147,483,648</button>
+      <button type="button" data-why="Look at the wheel again: 7 + 1 lands on −8, not on 0.">0</button>
+      <button type="button">−2,147,483,648</button>
+      <button type="button" data-why="−1 is 1111…1, the last step before wrapping back to 0. One step past the largest positive value lands somewhere else.">−1</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>It's the 4-bit wheel at a bigger scale: the largest positive value is <code>0111…1</code>, and adding 1 gives <code>1000…0</code>, the most negative value, <strong>−2,147,483,648</strong>. In C this is undefined behavior for signed integers, which is worse than wrapping: the compiler may assume it never happens.</p></div>
+  </div>
+
+  <!-- 6 -->
+  <h2 id="text">Text: ASCII, Unicode, and UTF-8</h2>
+  <p>Text works the same way: everyone agrees on a table that gives each character a number. The first widely used table was <span class="hl">ASCII</span> (1963). It uses 7 bits for 128 characters: English letters, digits, punctuation, and control codes like newline. In ASCII, <code>A</code> is 65 and <code>a</code> is 97. Try 65 on the switch panel (<code>01000001</code>).</p>
+  <p class="callout">Lowercase is exactly 32 more than uppercase, and 32 is a single bit (<code>00100000</code>). Changing a letter's case in ASCII just flips one switch. Try it on the panel: switch between <code>01000001</code> and <code>01100001</code>.</p>
+  <p>128 characters is enough for English and nothing else. <span class="hl">Unicode</span> is the modern table. It gives a number, called a <strong>code point</strong>, to nearly 160,000 characters from every major writing system, plus symbols and emoji. Code points are written <code>U+</code> followed by hex. <code>A</code> is still <code>U+0041</code> (65), <code>é</code> is <code>U+00E9</code>, and 😀 is <code>U+1F600</code>.</p>
+  <p>Unicode only says which number each character gets. An <strong>encoding</strong> decides how to store that number as bytes. The one the web runs on is <span class="hl">UTF-8</span>. It uses 1 to 4 bytes per character, and the first bits of each byte tell the reader how many bytes belong together:</p>
+
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Code points</th><th>Bytes</th><th>Bit pattern (x = bits of the code point)</th></tr></thead>
+    <tbody>
+      <tr><td>U+0000 to U+007F</td><td class="num">1</td><td class="bitpat"><i>0</i>xxxxxxx</td></tr>
+      <tr><td>U+0080 to U+07FF</td><td class="num">2</td><td class="bitpat"><i>110</i>xxxxx <i>10</i>xxxxxx</td></tr>
+      <tr><td>U+0800 to U+FFFF</td><td class="num">3</td><td class="bitpat"><i>1110</i>xxxx <i>10</i>xxxxxx <i>10</i>xxxxxx</td></tr>
+      <tr><td>U+10000 to U+10FFFF</td><td class="num">4</td><td class="bitpat"><i>11110</i>xxx <i>10</i>xxxxxx <i>10</i>xxxxxx <i>10</i>xxxxxx</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The first row is the clever part: every ASCII character is stored as the same single byte it always was, so old ASCII files are already valid UTF-8. That backward compatibility is a big reason UTF-8 won.</p>
+
+  <section class="panel utf8" aria-labelledby="utf8-title">
+    <h3 id="utf8-title">See the bytes</h3>
+    <div class="try">Type anything: accents, other alphabets, emoji.</div>
+    <input id="utf8-in" value="Hi é 😀" aria-label="Text to encode" spellcheck="false">
+    <div class="table-scroll">
+      <table><thead><tr><th>Char</th><th>Code point</th><th>UTF-8 bytes</th></tr></thead><tbody id="utf8-rows"></tbody></table>
+    </div>
+    <div class="counts" id="utf8-counts"></div>
+  </section>
+  <p>Notice the last count. JavaScript, Java, and C# store strings as UTF-16, so <code>"😀".length</code> is 2, not 1. Python 3's <code>len()</code> counts code points. And some emoji, like 👨‍👩‍👧, are several code points joined together, so what a person sees as "one character" can be many code points and many bytes. "How long is this string?" has more than one correct answer, and bugs live in the gap between them.</p>
+
+  <div class="problem" data-id="bits-p6" data-answer="5">
+    <span class="qtag">Practice 6</span>
+    <p class="q">How many bytes does the word <code>café</code> take in UTF-8?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Three of the letters are plain ASCII. Where does <code>U+00E9</code> fall in the table?</details>
+    <div class="solution" hidden><p><code>c</code>, <code>a</code>, and <code>f</code> take 1 byte each. <code>é</code> (<code>U+00E9</code>) is above <code>U+007F</code>, so it takes 2 bytes: <code>C3 A9</code>. Total: <strong>5</strong>. That's why a database column limited to "4 bytes" can't hold this 4-letter word.</p></div>
+  </div>
+
+  <!-- 7 -->
+  <h2 id="floats">Fractions and floating point</h2>
+  <p>Binary can have a point too, like a decimal point. To the right of it, columns are worth ½, ¼, ⅛, and so on. So <code>0.101</code> in binary is ½ + ⅛ = 0.625.</p>
+  <p>Here's the catch. In base 10 you can't write ⅓ exactly; it's 0.333… forever. In base 2 you can't write <strong>0.1</strong> exactly. It becomes <code>0.000110011001100…</code> repeating, and the computer has to cut it off somewhere. So the stored value is very slightly off.</p>
+  <p>Most languages store fractional numbers as <span class="hl">floating point</span>, using the IEEE 754 standard. It's scientific notation in base 2. A 64-bit "double" splits its bits into three parts:</p>
+
+  <figure class="figure">
+    <svg viewBox="0 0 640 112" role="img" aria-labelledby="f64-t">
+      <title id="f64-t">A 64-bit double: 1 sign bit, 11 exponent bits, 52 fraction bits.</title>
+      <text x="0" y="14" font-size="12">sign (1 bit): plus or minus</text>
+      <line x1="7" y1="18" x2="7" y2="26" stroke="var(--ink)" stroke-width="1.5"/>
+      <rect x="1" y="26" width="13" height="40" fill="var(--bad-bg)" stroke="var(--ink)" stroke-width="1.5"/>
+      <rect x="14" y="26" width="126" height="40" fill="var(--hl)" stroke="var(--ink)" stroke-width="1.5"/>
+      <rect x="140" y="26" width="498" height="40" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/>
+      <text x="77" y="88" text-anchor="middle" font-size="13">exponent (11 bits)</text>
+      <text x="77" y="106" text-anchor="middle" font-size="11" fill="var(--ink-2)">where the point goes</text>
+      <text x="389" y="88" text-anchor="middle" font-size="13">fraction (52 bits): the significant digits</text>
+      <text x="389" y="106" text-anchor="middle" font-size="11" fill="var(--ink-2)">about 15 to 17 decimal digits of precision</text>
+    </svg>
+    <figcaption>Like 6.02 × 10<sup>23</sup>, but in base 2: a sign, the significant digits, and an exponent that says where the point goes.</figcaption>
+  </figure>
+
+  <section class="panel floatlab" aria-labelledby="float-title">
+    <h3 id="float-title">Floating-point lab</h3>
+    <div class="try">This uses your browser's real 64-bit math. Try 0.1 + 0.2, then 0.5 + 0.25.</div>
+    <div class="row">
+      <label>a <input id="fa" value="0.1" inputmode="decimal"></label>
+      <label>b <input id="fb" value="0.2" inputmode="decimal"></label>
+      <label>Compare to <input id="fc" value="0.3" inputmode="decimal"></label>
+    </div>
+    <output id="fout" aria-live="polite"></output>
+  </section>
+
+  <p>0.5 and 0.25 are exact powers of two, so they're stored perfectly and the sum is exact. 0.1 and 0.2 aren't, so two tiny errors add up to a visible one. Neither result is a bug. It's how floating point is designed. Three habits follow from it:</p>
+  <ul>
+    <li><strong>Don't compare floats with <code>==</code>.</strong> Check whether they're within a small tolerance, like Python's <code>math.isclose(a, b)</code>.</li>
+    <li><strong>Don't store money in floats.</strong> Use whole cents as integers, or a decimal type such as Python's <code>Decimal</code> or SQL's <code>DECIMAL</code>.</li>
+    <li><strong>Mind the integer limit in JavaScript.</strong> Every JS number is a double, so integers are only exact up to 2<sup>53</sup> − 1. Use <code>BigInt</code> beyond that.</li>
+  </ul>
+
+  <div class="mcq" data-id="bits-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">You're building a checkout page. How should you store a price of $19.99?</p>
+    <div class="choices">
+      <button type="button" data-why="That's a 32-bit float: even less precise than a double.">As a 32-bit float, 19.99</button>
+      <button type="button" data-why="Doubles are more precise, but 19.99 still can't be stored exactly, and errors build up across many additions.">As a 64-bit double, 19.99</button>
+      <button type="button" data-why="Rounding on every operation hides the error sometimes, but it's easy to forget and still goes wrong in totals.">As a double, rounding after each operation</button>
+      <button type="button">As the integer 1999, counting cents</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>Integers are exact, so <strong>1999 cents</strong> adds and compares perfectly. A decimal type (like <code>DECIMAL(10,2)</code> in SQL) is also fine. Convert to dollars only when you display the value.</p></div>
+  </div>
+
+  <!-- 8 -->
+  <h2 id="stakes">When this goes wrong</h2>
+  <p>These aren't textbook curiosities. Each of these happened because a value didn't fit in the bits it was given.</p>
+  <div class="story">
+    <h3>Ariane 5, 1996</h3>
+    <p>Forty seconds after launch, a rocket's guidance software converted a 64-bit floating-point value to a 16-bit signed integer. The value was larger than 32,767, the conversion failed, the guidance system shut down, and the rocket was destroyed. The code had been reused from Ariane 4, which never flew fast enough to hit the limit.</p>
+  </div>
+  <div class="story">
+    <h3>The Patriot missile clock, 1991</h3>
+    <p>A missile defense system counted time in tenths of a second and stored 0.1 in a 24-bit register. Since 0.1 isn't exact in binary, each tick lost a tiny amount. After 100 hours of running, the clock was off by about a third of a second, enough to miss an incoming missile in Dhahran, Saudi Arabia. Twenty-eight soldiers died.</p>
+  </div>
+  <div class="story">
+    <h3>Gangnam Style, 2014</h3>
+    <p>YouTube's view counter used a signed 32-bit integer. When the video neared 2,147,483,647 views, YouTube switched the counter to 64 bits before it could wrap around to a negative number.</p>
+  </div>
+  <div class="story">
+    <h3>The year 2038</h3>
+    <p>Many systems store time as seconds since January 1, 1970, in a signed 32-bit integer. That runs out at 03:14:07 UTC on January 19, 2038, and wraps to December 1901. Modern systems use 64 bits, but old embedded devices and file formats are still out there.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>A bit is one on/off value. Meaning comes from how a program interprets a pattern of bits.</li>
+    <li>n bits give 2<sup>n</sup> patterns. Go past the largest value and it wraps around.</li>
+    <li>One hex digit is exactly four bits, which is why engineers read bytes in hex.</li>
+    <li>Two's complement makes the top bit negative, so the same adder works for signed and unsigned numbers.</li>
+    <li>Unicode numbers the characters; UTF-8 turns those numbers into 1 to 4 bytes.</li>
+    <li>Floating point is approximate. Compare with a tolerance, and keep money in integers or decimals.</li>
+  </ul>
+
+  <h3>Try it in a Python shell</h3>
+  <pre><code>&gt;&gt;&gt; bin(182), hex(182), int("10110110", 2)
+('0b10110110', '0xb6', 182)
+&gt;&gt;&gt; (-20).to_bytes(1, "big", signed=True).hex()
+'ec'
+&gt;&gt;&gt; "café".encode("utf-8")
+b'caf\xc3\xa9'
+&gt;&gt;&gt; 0.1 + 0.2, (0.1).hex()
+(0.30000000000000004, '0x1.999999999999ap-4')</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 1</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="bits">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>From logic gates to a CPU</strong>, where these bits start doing arithmetic on their own.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://cs50.harvard.edu/x/weeks/0/" target="_blank" rel="noopener">Harvard CS50x, Week 0</a><span>David Malan's opening lecture covers binary, ASCII, Unicode, and representing images and sound. Video and notes.</span></li>
+      <li><a href="https://www.cs.cmu.edu/~213/" target="_blank" rel="noopener">CMU 15-213: Introduction to Computer Systems</a><span>The "Bits, Bytes, and Integers" and "Floating Point" lectures go deeper on everything in this lesson.</span></li>
+      <li><a href="https://csapp.cs.cmu.edu/" target="_blank" rel="noopener">Computer Systems: A Programmer's Perspective</a><span>Bryant and O'Hallaron's textbook for 15-213. Chapter 2, "Representing and Manipulating Information," is the gold standard for this topic.</span></li>
+      <li><a href="https://cs61c.org/" target="_blank" rel="noopener">Berkeley CS61C: Great Ideas in Computer Architecture</a><span>Its number representation and floating-point lectures cover the same ground from the hardware side.</span></li>
+      <li><a href="https://www.nand2tetris.org/" target="_blank" rel="noopener">Nand2Tetris</a><span>Build a whole computer from logic gates up. A good companion for the next lesson.</span></li>
+      <li><a href="https://floating-point-gui.de/" target="_blank" rel="noopener">The Floating-Point Guide</a><span>A short, practical explanation of why floats behave the way they do, with advice per language.</span></li>
+      <li><a href="https://docs.python.org/3/tutorial/floatingpoint.html" target="_blank" rel="noopener">Python tutorial: Floating-Point Arithmetic</a><span>The official explanation of 0.1 + 0.2, with tools like <code>math.isclose</code> and <code>Decimal</code>.</span></li>
+      <li><a href="https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html" target="_blank" rel="noopener">What Every Computer Scientist Should Know About Floating-Point Arithmetic</a><span>David Goldberg's classic 1991 paper. Dense, but the definitive reference.</span></li>
+      <li><a href="https://www.joelonsoftware.com/2003/10/08/the-absolute-minimum-every-software-developer-absolutely-positively-must-know-about-unicode-and-character-sets-no-excuses/" target="_blank" rel="noopener">The Absolute Minimum Every Software Developer Must Know About Unicode</a><span>Joel Spolsky's famous essay on character sets and encodings.</span></li>
+      <li><a href="https://utf8everywhere.org/" target="_blank" rel="noopener">UTF-8 Everywhere</a><span>The case for UTF-8 as the one encoding, and the UTF-16 pitfalls behind <code>"😀".length === 2</code>.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Two%27s_complement" target="_blank" rel="noopener">Two's complement (Wikipedia)</a><span>Worked examples, and why the "flip and add 1" trick works.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Bit lab: eight switches, readouts, and an optional signed reading.
+  (function () {
+    const host = document.getElementById('switches');
+    const signedBox = document.getElementById('signed');
+    let value = 0;
+    const sw = [];
+    for (let i = 7; i >= 0; i--) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'sw'; b.dataset.bit = i;
+      b.innerHTML = `<span class="w"></span><span class="track"><span class="knob"></span></span><span class="v"></span>`;
+      b.onclick = () => { value ^= 1 << i; render(); UI.flag('flipped'); };
+      host.append(b); sw.push(b);
+    }
+    const weight = i => (i === 7 && signedBox.checked) ? -128 : 1 << i;
+    function render() {
+      const signed = signedBox.checked;
+      const shown = signed && value & 128 ? value - 256 : value;
+      sw.forEach(b => {
+        const i = +b.dataset.bit, on = !!(value & (1 << i));
+        b.setAttribute('aria-pressed', on);
+        b.setAttribute('aria-label', `Bit worth ${weight(i)}, ${on ? 'on' : 'off'}`);
+        b.querySelector('.w').textContent = weight(i);
+        b.querySelector('.v').textContent = on ? 1 : 0;
+        b.classList.toggle('signbit', i === 7 && signed);
+      });
+      const parts = sw.filter(b => value & (1 << b.dataset.bit)).map(b => weight(+b.dataset.bit));
+      document.getElementById('sum').textContent = parts.length
+        ? parts.join(' + ').replace(/\+ -/g, '− ').replace(/^-/, '−') + ' = ' + String(shown).replace('-', '−')
+        : 'All switches off = 0';
+      const bin = value.toString(2).padStart(8, '0');
+      document.getElementById('r-bin').textContent = bin.slice(0, 4) + ' ' + bin.slice(4);
+      document.getElementById('r-dec-label').textContent = signed ? 'Decimal (signed)' : 'Decimal';
+      document.getElementById('r-dec').textContent = String(shown).replace('-', '−');
+      document.getElementById('r-hex').textContent = '0x' + value.toString(16).toUpperCase().padStart(2, '0');
+      document.getElementById('r-chr').textContent = value >= 33 && value <= 126 ? String.fromCharCode(value) : value === 32 ? 'space' : 'none';
+    }
+    document.getElementById('inc').onclick = () => { value = (value + 1) & 255; render(); };
+    document.getElementById('dec').onclick = () => { value = (value + 255) & 255; render(); };
+    document.getElementById('clear').onclick = () => { value = 0; render(); };
+    signedBox.onchange = render;
+    render();
+  })();
+
+  // UTF-8 explorer: one row per code point, plus three different "lengths".
+  (function () {
+    const input = document.getElementById('utf8-in');
+    const enc = new TextEncoder();
+    const hex = n => n.toString(16).toUpperCase().padStart(2, '0');
+    function render() {
+      const rows = document.getElementById('utf8-rows');
+      rows.replaceChildren();
+      const chars = [...input.value];
+      chars.slice(0, 40).forEach(ch => {
+        const tr = rows.insertRow();
+        const cp = ch.codePointAt(0);
+        tr.insertCell().textContent = ch === ' ' ? 'space' : ch;
+        tr.cells[0].className = 'ch';
+        tr.insertCell().textContent = 'U+' + cp.toString(16).toUpperCase().padStart(4, '0');
+        tr.insertCell().textContent = [...enc.encode(ch)].map(hex).join(' ');
+      });
+      document.getElementById('utf8-counts').innerHTML =
+        `<span>Code points: <b>${chars.length}</b></span><span>UTF-8 bytes: <b>${enc.encode(input.value).length}</b></span><span>JavaScript <code>.length</code>: <b>${input.value.length}</b></span>`;
+    }
+    input.addEventListener('input', render);
+    render();
+  })();
+
+  // Floating-point lab: real double arithmetic, shown with more digits than usual.
+  (function () {
+    const get = id => document.getElementById(id).value.trim();
+    function render() {
+      const a = Number(get('fa')), b = Number(get('fb')), c = Number(get('fc'));
+      const out = document.getElementById('fout');
+      if ([a, b, c].some(Number.isNaN) || !get('fa') || !get('fb') || !get('fc')) { out.textContent = 'Enter three numbers, like 0.1, 0.2, and 0.3.'; return; }
+      const sum = a + b, same = sum === c;
+      out.innerHTML = `a + b = <b>${sum}</b><br>
+        a is really stored as ${a.toPrecision(25)}<br>
+        b is really stored as ${b.toPrecision(25)}<br>
+        <span class="verdict ${same ? 'yes' : 'no'}">(a + b) == ${c} is ${same}</span>`;
+    }
+    ['fa', 'fb', 'fc'].forEach(id => document.getElementById(id).addEventListener('input', render));
+    render();
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Pursuit of Lifelong Learning</title>
+<meta name="description" content="A self-paced course through software engineering and AI, built on the common ground of top university programs.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .hero { padding: 4.5rem 0 2rem; }
+  .hero h1 { font-size: clamp(2.6rem, 7vw, 4.8rem); line-height: .98; max-width: 12ch; margin-bottom: 1.2rem; }
+  .hero p { font-size: 1.2rem; color: var(--ink-2); max-width: 54ch; }
+  .next { display: flex; gap: 1.5rem; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    background: var(--panel); border: 2px solid var(--ink); border-radius: 10px; padding: 1.2rem 1.4rem; margin: 2rem 0 1rem; font-family: var(--sans); }
+  .next small { color: var(--ink-2); display: block; font-size: .9rem; }
+  .next strong { font-size: 1.2rem; }
+
+  /* Route map: a single line with one stop per stage. Stages are a true sequence, so they are numbered. */
+  .route { list-style: none; padding: 0; margin: 2rem 0 0; position: relative; }
+  .route::before { content: ''; position: absolute; left: 19px; top: 20px; bottom: 20px; width: 4px; background: var(--rule); border-radius: 2px; }
+  .stop { position: relative; padding: 0 0 2.2rem 64px; }
+  .stop .dot { position: absolute; left: 0; top: 0; width: 42px; height: 42px; border-radius: 50%;
+    display: grid; place-items: center; font: 800 .95rem var(--sans); background: var(--paper); border: 3px solid var(--rule); color: var(--pencil); }
+  .stop.current .dot { background: var(--hl); border-color: var(--ink); color: var(--hl-ink); box-shadow: 0 0 0 6px color-mix(in srgb, var(--hl) 35%, transparent); }
+  .stop.done .dot { background: var(--good); border-color: var(--good); color: var(--paper); }
+  .stop h3 { margin: .45rem 0 .3rem; font-size: 1.25rem; }
+  .stop:not(.current):not(.done) h3 { color: var(--ink-2); }
+  .stop p { margin: 0 0 .3rem; max-width: 60ch; }
+  .stop .src { font: .85rem var(--sans); color: var(--pencil); }
+  .lessons { list-style: none; padding: 0; margin: 1rem 0 0; font-family: var(--sans); border: 1.5px solid var(--ink); border-radius: 8px; background: var(--panel); overflow: hidden; }
+  .lessons li { display: flex; gap: .8rem; align-items: baseline; padding: .7rem 1rem; border-bottom: 1px solid var(--rule); }
+  .lessons li:last-child { border-bottom: 0; }
+  .lessons .n { font-weight: 700; color: var(--pencil); font-variant-numeric: tabular-nums; min-width: 1.6em; }
+  .lessons a { font-weight: 600; }
+  .lessons .meta { margin-left: auto; font-size: .85rem; color: var(--ink-2); white-space: nowrap; }
+  .lessons .planned { color: var(--pencil); }
+  .lessons li { line-height: 1.4; }
+  @media (max-width: 600px) {
+    .stop { padding-left: 54px; }
+    .lessons li { display: grid; grid-template-columns: 1.6em 1fr; gap: .2rem .8rem; }
+    .lessons .meta { grid-column: 2; margin-left: 0; }
+  }
+
+  .awards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .8rem; margin: 1rem 0 2rem; }
+  .award { font-family: var(--sans); border: 1.5px solid var(--ink); border-radius: 8px; padding: .8rem 1rem; background: var(--panel); }
+  .award b { display: block; }
+  .award span { font-size: .88rem; color: var(--ink-2); }
+  .award.locked { border-style: dashed; border-color: var(--pencil); background: transparent; }
+  .award.locked b { color: var(--ink-2); }
+  .award.got { background: var(--hl); color: var(--hl-ink); }
+  .award.got span { color: var(--hl-ink); }
+  footer { font: .9rem var(--sans); color: var(--ink-2); padding: 2rem 0 4rem; border-top: 1px solid var(--rule); }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div></header>
+
+<main class="wide">
+  <section class="hero">
+    <h1>The Pursuit of Lifelong Learning</h1>
+    <p>A broad, self-paced course through software engineering and AI, built from what the best university programs teach in common. Each stage builds on the last, from a single bit to the systems shaping where AI goes next.</p>
+    <div class="next" id="next"></div>
+  </section>
+
+  <h2>Your route</h2>
+  <ol class="route" id="route"></ol>
+
+  <h2>Achievements</h2>
+  <div class="awards" id="awards"></div>
+
+  <footer>
+    Progress is saved in this browser only.
+    <button class="linkish" id="reset" type="button">Reset progress</button>
+  </footer>
+</main>
+
+<script src="assets/progress.js"></script>
+<script src="assets/curriculum.js"></script>
+<script src="assets/ui.js"></script>
+<script>
+  // Render the route, the next-lesson card, and the achievement shelf from saved progress.
+  function render(s) {
+    const all = CURRICULUM.flatMap(st => st.lessons || []);
+    const next = all.find(l => l.href && !s.lessons[l.id]);
+    const stageDone = st => st.lessons && st.lessons.every(l => s.lessons[l.id]);
+    const current = CURRICULUM.findIndex(st => !stageDone(st));
+
+    document.getElementById('next').innerHTML = next
+      ? `<div><small>${Object.keys(s.solved).length ? 'Up next' : 'Start here'}</small><strong>${next.title}</strong></div><a class="btn" href="${next.href}">${Object.keys(s.solved).length ? 'Continue lesson' : 'Start lesson'}</a>`
+      : `<div><small>All written lessons finished</small><strong>New lessons are on the way.</strong></div>`;
+
+    document.getElementById('route').innerHTML = CURRICULUM.map((st, i) => {
+      const cls = stageDone(st) ? 'done' : i === current ? 'current' : '';
+      const lessons = st.lessons ? `<ol class="lessons">${st.lessons.map((l, j) => `
+        <li><span class="n">${j + 1}</span>${l.href ? `<a href="${l.href}">${l.title}</a>` : `<span class="planned">${l.title}</span>`}
+        <span class="meta">${s.lessons[l.id] ? 'Finished' : l.href ? `${l.minutes} min` : 'Coming soon'}</span></li>`).join('')}</ol>` : '';
+      return `<li class="stop ${cls}"><span class="dot" aria-hidden="true">${i + 1}</span>
+        <h3>Stage ${i + 1}: ${st.title}</h3><p>${st.summary}</p>
+        <div class="src">Draws on ${st.sources.join(', ')}</div>${lessons}</li>`;
+    }).join('');
+
+    document.getElementById('awards').innerHTML = Progress.ACHIEVEMENTS.map(a =>
+      `<div class="award ${s.achievements[a.id] ? 'got' : 'locked'}"><b>${a.name}</b><span>${a.desc}</span></div>`).join('');
+  }
+  document.addEventListener('progress', e => render(e.detail));
+  render(UI.state);
+  document.getElementById('reset').onclick = () => {
+    if (confirm('Erase all XP, streaks, and achievements in this browser?')) { localStorage.removeItem(Progress.KEY); location.reload(); }
+  };
+</script>
+</body>
+</html>
