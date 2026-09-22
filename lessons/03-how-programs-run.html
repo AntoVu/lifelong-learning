@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How a program actually runs | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .seg { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .seg button { font: 600 .9rem var(--sans); padding: .35em .8em; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+  .machine { display: flex; flex-wrap: wrap; gap: 1.4rem; margin: 1rem 0; align-items: flex-start; }
+  .mem { display: grid; grid-template-columns: repeat(4, 4.2rem); gap: .35rem; }
+  .cell { border: 1.5px solid var(--rule); border-radius: 6px; padding: .25rem .3rem .3rem; background: var(--paper); text-align: center; }
+  .cell .addr { display: block; font: .7rem var(--mono); color: var(--pencil); text-align: left; }
+  .cell input { width: 100%; font: 700 1.05rem var(--mono); text-align: center; border: 0; background: transparent; color: var(--ink); text-transform: uppercase; padding: 0; }
+  .cell .asm { display: block; font: .68rem var(--mono); color: var(--ink-2); white-space: nowrap; }
+  .cell.pc { border-color: var(--ink); box-shadow: 0 0 0 2px var(--hl); }
+  .cell.touched { background: var(--hl); }
+  .cell.touched input, .cell.touched .asm, .cell.touched .addr { color: var(--hl-ink); }
+  .memcol { flex: none; width: calc(4 * 4.2rem + 3 * .35rem); }
+  .memcap { font: .8rem var(--sans); color: var(--ink-2); margin: .3rem 0 0; }
+
+  .cpu { flex: 1 1 15rem; display: grid; gap: .5rem; font-family: var(--sans); }
+  .phases { display: flex; gap: .3rem; }
+  .phases span { flex: 1; text-align: center; font: 600 .85rem var(--sans); padding: .3rem; border: 1.5px solid var(--rule); border-radius: 6px; color: var(--ink-2); }
+  .phases span.now { border-color: var(--ink); background: var(--hl); color: var(--hl-ink); }
+  .regs { display: grid; grid-template-columns: auto 1fr; gap: .25rem .8rem; align-items: baseline; }
+  .regs dt { font: 700 .9rem var(--mono); }
+  .regs dd { margin: 0; font: .95rem var(--mono); }
+  .regs dd small { font-family: var(--sans); color: var(--ink-2); }
+  .regs dd.changed { background: var(--hl); color: var(--hl-ink); border-radius: 3px; padding: 0 .3rem; justify-self: start; }
+  .explain { font: .95rem/1.5 var(--sans); min-height: 4.5em; margin: 0; padding: .6rem .8rem; border-left: 4px solid var(--hl); background: var(--paper); }
+  .outtape { font: 1rem var(--mono); margin: 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .4rem; }
+
+  .isa td:first-child, .isa td:nth-child(2) { font-family: var(--mono); white-space: nowrap; }
+  .side { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+  .side pre { margin: 0; }
+  .side h4 { font: 600 .9rem var(--sans); color: var(--ink-2); margin: 0 0 .4rem; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 1: How computers work, lesson 3 of 5</div>
+    <h1>How a program actually runs</h1>
+    <p class="lede">Lesson 2 ended with a CPU and one missing piece: the control unit. Here you'll see how a list of bytes in memory becomes a running program, by stepping a tiny computer through it one instruction at a time.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="toy-title">
+    <h2 id="toy-title" style="margin-top:0;font-size:1.25rem">A computer you can step through</h2>
+    <div class="try">Pick a program and press Step. Each press runs one phase: fetch, decode, or execute.</div>
+    <div class="seg" id="programs" role="group" aria-label="Program"></div>
+    <div class="machine">
+      <div class="memcol">
+        <div class="mem" id="mem" aria-label="Memory: 16 bytes"></div>
+        <p class="memcap">16 bytes of memory. Each cell shows its address, its byte in hex (you can edit it), and that byte read as an instruction.</p>
+      </div>
+      <div class="cpu">
+        <div class="phases" id="phases"><span>Fetch</span><span>Decode</span><span>Execute</span></div>
+        <dl class="regs" id="regs"></dl>
+        <p class="explain" id="explain" aria-live="polite"></p>
+        <p class="outtape" id="out">Output: (nothing yet)</p>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn" type="button" id="step">Step</button>
+      <button class="btn quiet" type="button" id="step-ins">Run one instruction</button>
+      <button class="btn quiet" type="button" id="run">Run</button>
+      <button class="btn quiet" type="button" id="reset">Reset</button>
+    </div>
+  </section>
+  <p>That's a complete computer. It's far smaller than a real one, but it works on the same principle. By the end of this lesson you'll be able to read its programs, change them, and see how the code you write turns into something like them.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain the stored-program idea: instructions are just bytes in memory.</li>
+      <li>Decode and encode machine instructions for a simple instruction set.</li>
+      <li>Walk through the fetch-decode-execute cycle and say what the program counter does.</li>
+      <li>Show how jumps turn straight-line code into loops and <code>if</code> statements.</li>
+      <li>Describe how compilers and interpreters get from source code to instructions.</li>
+      <li>Explain why memory is slow compared to the CPU, and what that means for your code.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#stored">Programs are data</a></li>
+      <li><a href="#encoding">Instructions are numbers</a></li>
+      <li><a href="#cycle">Fetch, decode, execute</a></li>
+      <li><a href="#jumps">Jumps make loops and decisions</a></li>
+      <li><a href="#languages">From your code to instructions</a></li>
+      <li><a href="#real">What real CPUs add</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="stored">Programs are data</h2>
+  <p>The first electronic computers were programmed by hand. To change what ENIAC computed in 1945, operators spent days moving cables and setting switches. The program was the wiring.</p>
+  <p>The fix was the <span class="hl">stored-program</span> idea, described in John von Neumann's 1945 report on the EDVAC, building on work by J. Presper Eckert and John Mauchly: keep the program in the same memory as the data, as numbers. Loading a new program is then just writing new bytes. The Manchester Baby ran the first stored program on June 21, 1948, and nearly every computer since has worked this way.</p>
+  <p>Look at the memory in the toy computer. There's nothing that marks a byte as "code" or "data". In the Add program, address <code>E</code> holds <code>1C</code>, the number 28. Its cell also shows <code>LDA 12</code>, because that's what those bits would mean if the CPU ever fetched them. Whether a byte is an instruction depends only on whether the CPU tries to run it.</p>
+
+  <div class="mcq" data-id="fetch-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">How does the CPU know that the byte at address <code>E</code> of the Add program is data and not an instruction?</p>
+    <div class="choices">
+      <button type="button" data-why="No extra bits are stored. Each cell is exactly 8 bits.">Each byte carries a hidden tag bit that marks it as data</button>
+      <button type="button">It doesn't. The program never jumps to that address, so it's never fetched</button>
+      <button type="button" data-why="Memory has no such regions in this machine; code and data share the same 16 cells.">Data always lives in a separate, read-only part of memory</button>
+      <button type="button" data-why="Any 8-bit pattern decodes to some instruction here; 1C decodes as LDA 12.">The value 28 isn't a valid instruction</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>The CPU only runs what the program counter points to. The program halts at address 3, so it <strong>never fetches</strong> address <code>E</code>. If a bug sent the program counter there, the CPU would happily run 28 as <code>LDA 12</code>. That flexibility is powerful, and you'll see at the end of the lesson how attackers abuse it.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="encoding">Instructions are numbers</h2>
+  <p>The toy computer's instructions are one byte each. The top 4 bits are the <span class="hl">opcode</span>, which says what to do. The bottom 4 bits are the <span class="hl">operand</span>, usually a memory address. Four bits can name 16 addresses, which is exactly how much memory there is. It has one working register, <code>A</code> (the accumulator), and a zero flag, <code>Z</code>, from the ALU in lesson 2.</p>
+
+  <div class="table-scroll">
+  <table class="isa">
+    <thead><tr><th>Opcode</th><th>Instruction</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td>HLT</td><td>Stop the machine</td></tr>
+      <tr><td>1</td><td>LDA a</td><td>Load: copy the byte at address <code>a</code> into A</td></tr>
+      <tr><td>2</td><td>ADD a</td><td>A = A + the byte at address <code>a</code>; set Z if the result is 0</td></tr>
+      <tr><td>3</td><td>SUB a</td><td>A = A − the byte at address <code>a</code>; set Z if the result is 0</td></tr>
+      <tr><td>4</td><td>STA a</td><td>Store: copy A into address <code>a</code></td></tr>
+      <tr><td>5</td><td>LDI n</td><td>Load immediate: A = <code>n</code>, the operand itself (0 to 15)</td></tr>
+      <tr><td>6</td><td>JMP a</td><td>Jump: continue running from address <code>a</code></td></tr>
+      <tr><td>7</td><td>JZ a</td><td>Jump to <code>a</code> only if Z is set</td></tr>
+      <tr><td>8</td><td>OUT</td><td>Show A on the output</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <figure class="figure">
+    <svg viewBox="0 0 520 150" role="img" aria-labelledby="enc-t" style="max-width:560px">
+      <title id="enc-t">The byte 0x2F splits into opcode 0010, which is 2 for ADD, and operand 1111, which is address 15. So 2F means ADD 15.</title>
+      <g class="mono" font-size="22" font-weight="700" text-anchor="middle">
+        <rect x="60" y="30" width="200" height="46" rx="6" fill="var(--hl)" stroke="var(--ink)" stroke-width="2"/>
+        <rect x="260" y="30" width="200" height="46" rx="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/>
+        <text x="160" y="61" fill="#1b2a41">0 0 1 0</text>
+        <text x="360" y="61">1 1 1 1</text>
+      </g>
+      <text x="260" y="20" class="gsmall" text-anchor="middle">the byte 0x2F</text>
+      <path d="M160,82 V100 M360,82 V100" stroke="var(--ink)" stroke-width="2"/>
+      <text x="160" y="122" text-anchor="middle" font-weight="600" font-size="15">opcode 2 = ADD</text>
+      <text x="360" y="122" text-anchor="middle" font-weight="600" font-size="15">operand 15 = address F</text>
+      <text x="160" y="142" text-anchor="middle" font-size="13" fill="var(--ink-2)">what to do</text>
+      <text x="360" y="142" text-anchor="middle" font-size="13" fill="var(--ink-2)">what to do it with</text>
+    </svg>
+    <figcaption>One hex digit is 4 bits (lesson 1), so you can read the opcode and operand straight off the hex: <code>2F</code> is ADD 15.</figcaption>
+  </figure>
+
+  <p>The control unit is the circuit that does this split. Its job is to look at the opcode and set the control lines from lesson 2: which register gets written, which operation the ALU runs, whether memory is read or written. Writing programs as hex bytes gets old fast, so people write them as <span class="hl">assembly language</span>, like <code>ADD 15</code>, and a program called an assembler turns each line into its byte.</p>
+
+  <div class="problem" data-id="fetch-p1" data-answer="lda5|lda05|lda0x5|lda0x05">
+    <span class="qtag">Practice 1</span>
+    <p class="q">Decode the byte <code>0x15</code> into an instruction for the toy computer.</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off" placeholder="e.g. ADD 15"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The first hex digit is the opcode; look it up in the table. The second digit is the address.</details>
+    <div class="solution" hidden><p>Opcode 1 is LDA and the operand is 5, so <code>0x15</code> is <strong>LDA 5</strong>: load the byte at address 5 into A.</p></div>
+  </div>
+
+  <div class="problem" data-id="fetch-p2" data-answer="4d|0x4d">
+    <span class="qtag">Practice 2</span>
+    <p class="q">Assemble <code>STA 13</code> into a byte. Give it in hex.</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>STA is opcode 4. What's 13 as a single hex digit?</details>
+    <div class="solution" hidden><p>Opcode 4, operand 13 = <code>D</code>, so the byte is <strong>0x4D</strong>. You'll find it at address 2 of the Multiply program.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="cycle">Fetch, decode, execute</h2>
+  <p>The CPU needs to remember where it is in the program. That's the job of one special register, the <span class="hl">program counter</span> (PC), which holds the address of the next instruction. A second register, the <span class="hl">instruction register</span> (IR), holds the instruction being worked on. Then the CPU repeats three steps for as long as it's powered on:</p>
+
+  <figure class="figure">
+    <svg viewBox="0 0 640 250" role="img" aria-labelledby="cyc-t">
+      <title id="cyc-t">The instruction cycle. Fetch: copy memory at PC into IR, then add 1 to PC. Decode: split IR into opcode and operand and set the control lines. Execute: the ALU computes, a register or memory changes, or PC is changed by a jump. Then back to fetch.</title>
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/></marker></defs>
+      <rect x="20" y="40" width="180" height="120" rx="10" fill="var(--hl)" stroke="var(--ink)" stroke-width="2"/>
+      <rect x="230" y="40" width="180" height="120" rx="10" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/>
+      <rect x="440" y="40" width="180" height="120" rx="10" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="110" y="70" class="glabel" text-anchor="middle" fill="#1b2a41" style="font-size:16px">1. Fetch</text>
+      <text x="110" y="98" text-anchor="middle" class="mono" font-size="13" fill="#1b2a41">IR ← memory[PC]</text>
+      <text x="110" y="120" text-anchor="middle" class="mono" font-size="13" fill="#1b2a41">PC ← PC + 1</text>
+      <text x="320" y="70" class="glabel" text-anchor="middle" style="font-size:16px">2. Decode</text>
+      <text x="320" y="98" class="gsmall" text-anchor="middle">split IR into opcode</text>
+      <text x="320" y="116" class="gsmall" text-anchor="middle">and operand, set the</text>
+      <text x="320" y="134" class="gsmall" text-anchor="middle">control lines</text>
+      <text x="530" y="70" class="glabel" text-anchor="middle" style="font-size:16px">3. Execute</text>
+      <text x="530" y="98" class="gsmall" text-anchor="middle">ALU computes, a register</text>
+      <text x="530" y="116" class="gsmall" text-anchor="middle">or memory changes,</text>
+      <text x="530" y="134" class="gsmall" text-anchor="middle">or a jump sets PC</text>
+      <line x1="200" y1="100" x2="226" y2="100" stroke="var(--ink)" stroke-width="2" marker-end="url(#arr)"/>
+      <line x1="410" y1="100" x2="436" y2="100" stroke="var(--ink)" stroke-width="2" marker-end="url(#arr)"/>
+      <path d="M530,160 V210 H110 V164" fill="none" stroke="var(--ink)" stroke-width="2" marker-end="url(#arr)"/>
+      <text x="320" y="230" class="gsmall" text-anchor="middle">repeat, billions of times a second</text>
+    </svg>
+    <figcaption>The instruction cycle. Notice that PC moves forward during fetch, before the instruction runs. Execute can then overwrite it, which is how jumps work.</figcaption>
+  </figure>
+
+  <p>Go back to the toy computer, pick Add, and press Step slowly. Watch the outlined cell (where PC points) and the explanation. After four instructions, <code>A</code> holds 28 + 14 = 42 and the output shows it.</p>
+
+  <div class="mcq" data-id="fetch-q2" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">The CPU has just fetched the instruction at address 6, which is <code>ADD 14</code>. What's in the program counter while that instruction executes?</p>
+    <div class="choices">
+      <button type="button" data-why="PC moves forward during fetch, before execute.">6</button>
+      <button type="button" data-why="That's the operand of the instruction, not the next address.">14</button>
+      <button type="button">7</button>
+      <button type="button" data-why="Only a jump sends PC back to 0.">0</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>7</strong>. Fetch copies the instruction into IR and adds 1 to PC straight away, so PC already points at the next instruction during execute. Real CPUs do the same thing, which is why a debugger's "current address" and the program counter can differ by one instruction.</p></div>
+  </div>
+
+  <p>Now edit a program. Every cell's byte is editable: click it and type a new hex value.</p>
+  <div class="problem" data-id="fetch-p3" data-answer="3f|0x3f">
+    <span class="qtag">Practice 3</span>
+    <p class="q">In the Add program, change one byte so it outputs 28 − 14 instead of 28 + 14. What should the new byte at address 1 be?</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Address 1 holds <code>2F</code>, ADD 15. Keep the operand and change the opcode.</details>
+    <div class="solution" hidden><p><strong>3F</strong>: SUB 15. Type it into cell 1 and press Run, and the output becomes 14. Changing a program and changing data are the same operation, writing bytes.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="jumps">Jumps make loops and decisions</h2>
+  <p>If PC only ever went up by one, every program would run straight through once and stop. <span class="hl">Jumps</span> change that. <code>JMP</code> always sets PC to a new address, which gives you loops. <code>JZ</code> sets it only if the last result was zero, which gives you decisions. Every <code>if</code>, <code>while</code>, and <code>for</code> you write ends up as a few compare-and-jump instructions like these.</p>
+  <p>Here's the Countdown program next to the Python it does the same job as:</p>
+
+  <div class="side">
+    <div>
+      <h4>Python</h4>
+<pre><code>n = 3
+while True:
+    print(n)
+    n = n - 1
+    if n == 0:
+        break</code></pre>
+    </div>
+    <div>
+      <h4>Toy assembly (address: instruction)</h4>
+<pre><code>0: LDI 3    ; A = 3
+1: OUT      ; print A
+2: SUB 15   ; A = A − 1 (address 15 holds 1)
+3: JZ 5     ; if A is 0, leave the loop
+4: JMP 1    ; otherwise go back to 1
+5: HLT</code></pre>
+    </div>
+  </div>
+  <p>Run Countdown and watch PC jump from 4 back to 1. Only <code>JZ</code> can break the cycle, and only once <code>SUB</code> produces a zero.</p>
+
+  <div class="mcq" data-id="fetch-q3" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">In Countdown, you change address 15 from <code>01</code> to <code>02</code>, so the loop subtracts 2 each time. Starting from 3, what happens?</p>
+    <div class="choices">
+      <button type="button" data-why="3 − 2 is 1, and 1 − 2 isn't 0. Follow it one more step.">It prints 3, 1 and stops</button>
+      <button type="button" data-why="Nothing in this CPU checks for negative numbers. A is an 8-bit register, so 1 − 2 wraps around.">It prints 3, 1 and then reports an error</button>
+      <button type="button">It never stops</button>
+      <button type="button" data-why="The first OUT runs before any subtraction.">It prints nothing</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>It <strong>never stops</strong>. A goes 3, 1, then 1 − 2 wraps to 255 (lesson 1's overflow), then 253, 251, and so on. Every value is odd, so it never lands on 0 and <code>JZ</code> never jumps. Try it: the toy computer pauses itself after 500 instructions. A real CPU has no such limit, which is how a program "hangs".</p></div>
+  </div>
+
+  <p>The Multiply program combines both kinds of jump to compute 3 × 4 by adding 3 four times. It keeps a running total at address 13 and a counter at address 15, and it uses <code>STA</code> to write them back each time around the loop.</p>
+
+  <div class="problem" data-id="fetch-p4" data-answer="15|0f|0x0f|0xf|f">
+    <span class="qtag">Practice 4</span>
+    <p class="q">In the Multiply program, address 14 holds 3 and address 15 holds 4. If you change address 15 to <code>05</code> and run it, what number does it output?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Address 15 is the loop counter: how many times 3 gets added.</details>
+    <div class="solution" hidden><p>The loop now adds 3 five times: <strong>15</strong>. The CPU has no multiply instruction, so the program builds one out of addition, a counter, and a conditional jump. Early CPUs, like the 6502 in the Apple II, really did multiply this way in software.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="languages">From your code to instructions</h2>
+  <p>Real CPUs have the same kind of instructions as the toy one, just more of them and wider. Your code reaches them in one of two ways.</p>
+  <p>A <span class="hl">compiler</span> translates your whole program into machine code before it runs. This is how C, C++, Rust, and Go work. Here's a C function and what GCC turns it into for an x86-64 laptop:</p>
+
+  <div class="side">
+    <div>
+      <h4>C</h4>
+<pre><code>int add(int a, int b) {
+    return a + b;
+}</code></pre>
+    </div>
+    <div>
+      <h4>x86-64 assembly (GCC -O2)</h4>
+<pre><code>add:
+    lea  eax, [rdi+rsi]  ; eax = a + b
+    ret                  ; return to caller</code></pre>
+    </div>
+  </div>
+  <p>Those two lines are 4 bytes of machine code: <code>8D 04 37 C3</code>. The arguments arrive in registers <code>rdi</code> and <code>rsi</code>, and the result goes back in <code>eax</code>. On an ARM chip, like an Apple M-series Mac or most phones, the same function compiles to <code>add w0, w0, w1</code> and <code>ret</code>. Different instruction sets, same idea. You can see this for any code at Compiler Explorer, linked below.</p>
+  <p>An <span class="hl">interpreter</span> is a program that reads your code and carries it out. Python does a bit of both: it first compiles your code to <span class="hl">bytecode</span>, instructions for an imaginary machine, and then a program called the Python virtual machine runs them. That virtual machine is itself a fetch-decode-execute loop, written in C. You can look at the bytecode with the <code>dis</code> module:</p>
+<pre><code>&gt;&gt;&gt; import dis
+&gt;&gt;&gt; def add(a, b):
+...     return a + b
+&gt;&gt;&gt; dis.dis(add)
+  1           RESUME                   0
+  2           LOAD_FAST_BORROW_LOAD_FAST_BORROW 1 (a, b)
+              BINARY_OP                0 (+)
+              RETURN_VALUE</code></pre>
+  <p>That output is from Python 3.14; instruction names change a little between versions. Python's virtual machine keeps values on a stack instead of in named registers: the first instruction pushes <code>a</code> and <code>b</code>, <code>BINARY_OP</code> pops both and pushes their sum, and <code>RETURN_VALUE</code> hands back the top of the stack. Each of those bytecode instructions takes many real CPU instructions to carry out, which is a big part of why Python is slower than C.</p>
+
+  <div class="mcq" data-id="fetch-q4" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">When you run a Python script, what actually executes the bytecode instructions?</p>
+    <div class="choices">
+      <button type="button" data-why="CPUs run their own instruction set, like x86-64 or ARM. They can't run Python bytecode directly.">The CPU, directly</button>
+      <button type="button" data-why="The OS loads and schedules programs; it doesn't run bytecode.">The operating system</button>
+      <button type="button" data-why="Python compiles to bytecode, not to machine code (apart from optional just-in-time compilers).">Python first compiles it all to x86 machine code</button>
+      <button type="button">A program, the Python virtual machine, with its own fetch-decode-execute loop</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>The <strong>Python virtual machine</strong>, part of the <code>python</code> program, fetches each bytecode instruction, decodes it, and runs the C code that carries it out. Java and C# work the same way with their own bytecode, but their virtual machines also compile frequently run code to real machine code while the program runs (just-in-time compilation).</p></div>
+  </div>
+
+  <!-- 6 -->
+  <h2 id="real">What real CPUs add</h2>
+  <p>A modern CPU still fetches, decodes, and executes, but it adds a few big tricks to go faster:</p>
+  <ul>
+    <li><strong>More and wider registers.</strong> x86-64 has 16 general-purpose 64-bit registers; 64-bit ARM has 31.</li>
+    <li><strong>Pipelining.</strong> Like a laundry with a washer and dryer running at once, the CPU fetches the next instruction while decoding one and executing another. Modern cores keep dozens of instructions in flight.</li>
+    <li><strong>Branch prediction.</strong> A pipeline needs to know what to fetch next, but a jump's direction isn't known until it executes. So the CPU guesses, usually based on what the jump did last time, and throws the work away if it guessed wrong.</li>
+    <li><strong>Caches.</strong> Main memory is slow. A trip to RAM takes on the order of 100 nanoseconds, which is hundreds of clock ticks. So CPUs keep copies of recently used memory in small, fast caches right on the chip.</li>
+  </ul>
+  <p>That last point matters for everyday code. Reading memory in order, like walking through an array, is fast because the cache fetches neighbors ahead of time. Jumping around memory, like following links in a linked list, can be many times slower even when the algorithm looks the same on paper. Stage 4 comes back to this.</p>
+
+  <div class="problem" data-id="fetch-p5" data-answer="300|300cycles|300ticks">
+    <span class="qtag">Practice 5</span>
+    <p class="q">A 3 GHz CPU waits 100 nanoseconds for a value from RAM. How many clock ticks is that?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>3 GHz is 3 ticks per nanosecond.</details>
+    <div class="solution" hidden><p>3 ticks per nanosecond × 100 ns = <strong>300 ticks</strong>. A modern core can finish several instructions per tick, so one slow memory read can cost the time of a thousand instructions. That's why caches exist.</p></div>
+  </div>
+
+  <div class="mcq" data-id="fetch-q5" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">Why does branch prediction exist?</p>
+    <div class="choices">
+      <button type="button">The pipeline has to fetch the next instructions before it knows which way a jump will go</button>
+      <button type="button" data-why="Prediction is about speed, not correctness. Wrong guesses are thrown away.">Without it, programs with <code>if</code> statements would give wrong answers</button>
+      <button type="button" data-why="Compilers do optimize branches, but prediction happens in hardware while the program runs.">It lets the compiler remove <code>if</code> statements</button>
+      <button type="button" data-why="Caches store memory; prediction guesses jump directions.">It decides which memory goes into the cache</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>With many instructions in flight, waiting for each jump to finish would stall the pipeline. Guessing <strong>keeps the pipeline full</strong>; modern predictors are right well over 90% of the time on typical code. When they're wrong, the CPU discards the guessed work and starts over from the right address.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>The Morris worm, 1988</h3>
+    <p>Because code and data share memory, data can become code. Robert Morris's worm attacked a network service called <code>fingerd</code>, which read a request into a 512-byte buffer without checking its length. The worm sent a longer request containing machine code, which overwrote the function's return address so the CPU jumped into the attacker's bytes. It spread to thousands of machines, a large share of the internet at the time. Modern CPUs and operating systems now mark data memory as non-executable, so the CPU refuses to fetch instructions from it.</p>
+  </div>
+  <div class="story">
+    <h3>Spectre and Meltdown, 2018</h3>
+    <p>Branch prediction made CPUs fast for decades. In January 2018, researchers showed it could leak secrets. When the CPU guesses wrong, it throws away the results, but the guessed work has already pulled data into the cache, and an attacker can measure which memory is now fast to read. That's enough to read passwords and keys from other programs. Fixes went into operating systems, browsers, and new chip designs, and some cost real performance.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>A program is bytes in memory. Whether a byte is code or data depends only on whether the CPU runs it.</li>
+    <li>An instruction is a number: an opcode (what to do) and operands (what to do it with).</li>
+    <li>The CPU loops forever: fetch the instruction at PC and add 1 to PC, decode it, execute it.</li>
+    <li>Jumps overwrite PC. Unconditional jumps make loops; conditional jumps make decisions.</li>
+    <li>Compilers translate to machine code ahead of time. Python compiles to bytecode, and a virtual machine runs it.</li>
+    <li>Memory is hundreds of times slower than the CPU's clock, so caches and access patterns matter.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>The toy computer fits in about fifteen lines of Python. This is the whole fetch-decode-execute loop:</p>
+<pre><code>def run(mem):
+    pc, a, z = 0, 0, False
+    while True:
+        ir = mem[pc]; pc = (pc + 1) % 16          # fetch
+        op, arg = ir &gt;&gt; 4, ir &amp; 15                # decode
+        if   op == 0: return                      # HLT
+        elif op == 1: a = mem[arg]                # LDA
+        elif op == 2: a = (a + mem[arg]) % 256; z = a == 0   # ADD
+        elif op == 3: a = (a - mem[arg]) % 256; z = a == 0   # SUB
+        elif op == 4: mem[arg] = a                # STA
+        elif op == 5: a = arg                     # LDI
+        elif op == 6: pc = arg                    # JMP
+        elif op == 7 and z: pc = arg              # JZ
+        elif op == 8: print(a)                    # OUT
+
+run([0x53, 0x80, 0x3F, 0x75, 0x61, 0x00] + [0] * 9 + [1])  # Countdown: 3 2 1</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 3</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="fetch">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Values, variables, and control flow</strong>, where you trace real Python programs line by line and see the loops and jumps from this lesson in the code you write.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.nand2tetris.org/" target="_blank" rel="noopener">Nand2Tetris</a><span>Projects 4 and 5 have you write machine language for the Hack computer and then build the CPU that runs it.</span></li>
+      <li><a href="https://eater.net/8bit" target="_blank" rel="noopener">Ben Eater: Build an 8-bit computer</a><span>The toy computer here is close to his breadboard design. Watch the control logic and programming videos to see one built for real.</span></li>
+      <li><a href="https://cs61c.org/" target="_blank" rel="noopener">Berkeley CS61C: Great Ideas in Computer Architecture</a><span>RISC-V assembly, instruction formats, and how a datapath runs each instruction.</span></li>
+      <li><a href="https://www.cs.cmu.edu/~213/" target="_blank" rel="noopener">CMU 15-213: Introduction to Computer Systems</a><span>The machine-level programming lectures read x86-64 assembly produced from real C code.</span></li>
+      <li><a href="https://godbolt.org/" target="_blank" rel="noopener">Compiler Explorer</a><span>Type C, C++, Rust, Go, and more on the left; see the assembly on the right, for many compilers and CPUs.</span></li>
+      <li><a href="https://docs.python.org/3/library/dis.html" target="_blank" rel="noopener">Python docs: dis</a><span>The bytecode disassembler, with a list of every bytecode instruction.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Instruction_cycle" target="_blank" rel="noopener">Instruction cycle (Wikipedia)</a><span>Fetch, decode, execute in more detail.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Von_Neumann_architecture" target="_blank" rel="noopener">Von Neumann architecture (Wikipedia)</a><span>The stored-program design, where it came from, and its limits.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Manchester_Baby" target="_blank" rel="noopener">Manchester Baby (Wikipedia)</a><span>The first stored-program computer to run a program, with its 7-instruction set.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Little_man_computer" target="_blank" rel="noopener">Little Man Computer (Wikipedia)</a><span>A classic teaching model of a CPU, similar to the toy computer, with many online simulators.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Morris_worm" target="_blank" rel="noopener">Morris worm (Wikipedia)</a><span>How the 1988 worm worked and what it changed.</span></li>
+      <li><a href="https://meltdownattack.com/" target="_blank" rel="noopener">Meltdown and Spectre</a><span>The researchers' site, with both papers and plain-language answers.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Toy computer: 16 bytes of memory, accumulator A, zero flag Z. Opcode in the high nibble.
+  (function () {
+    const PROGRAMS = {
+      Add:       { mem: [0x1E, 0x2F, 0x80, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1C, 0x0E], note: 'Adds the numbers at addresses 14 and 15 (28 and 14) and outputs the sum.' },
+      Countdown: { mem: [0x53, 0x80, 0x3F, 0x75, 0x61, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01], note: 'Outputs 3, 2, 1 using a loop.' },
+      Multiply:  { mem: [0x1D, 0x2E, 0x4D, 0x1F, 0x3C, 0x4F, 0x78, 0x60, 0x1D, 0x80, 0x00, 0, 0x01, 0x00, 0x03, 0x04], note: 'Multiplies 3 (address 14) by 4 (address 15) by adding 3 four times.' },
+    };
+    const NAMES = ['HLT', 'LDA', 'ADD', 'SUB', 'STA', 'LDI', 'JMP', 'JZ', 'OUT'];
+    const NO_ARG = new Set([0, 8]);
+    const hex = (v, n = 2) => v.toString(16).toUpperCase().padStart(n, '0');
+    const asm = b => { const op = b >> 4, arg = b & 15; return op > 8 ? '?' : NO_ARG.has(op) ? NAMES[op] : `${NAMES[op]} ${arg}`; };
+    const LIMIT = 500;
+
+    let prog = 'Add', m, timer = null;
+    const $ = id => document.getElementById(id);
+    const cells = [];
+
+    // Memory grid
+    for (let i = 0; i < 16; i++) {
+      const c = document.createElement('div');
+      c.className = 'cell';
+      c.innerHTML = `<span class="addr">${hex(i, 1)}</span><input maxlength="2" spellcheck="false" aria-label="Byte at address ${i}"><span class="asm"></span>`;
+      const input = c.querySelector('input');
+      input.addEventListener('change', () => {
+        const v = parseInt(input.value, 16);
+        if (/^[0-9a-f]{1,2}$/i.test(input.value.trim()) && v >= 0) m.mem[i] = v;
+        render();
+      });
+      $('mem').append(c); cells.push(c);
+    }
+
+    Object.keys(PROGRAMS).forEach(name => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = name; b.setAttribute('aria-pressed', name === prog);
+      b.onclick = () => { prog = name; [...$('programs').children].forEach(c => c.setAttribute('aria-pressed', c === b)); reset(); };
+      $('programs').append(b);
+    });
+
+    function reset() {
+      stop();
+      m = { mem: PROGRAMS[prog].mem.slice(), pc: 0, ir: null, a: 0, z: false, phase: 0, out: [], halted: false, count: 0, touched: -1, changed: new Set(),
+            msg: `${PROGRAMS[prog].note} Press Step to fetch the first instruction.` };
+      render();
+    }
+
+    // Run one phase: 0 fetch, 1 decode, 2 execute.
+    function step() {
+      if (m.halted) return;
+      m.changed = new Set(); m.touched = -1;
+      if (m.phase === 0) {
+        if (m.count >= LIMIT) { m.msg = `Paused after ${LIMIT} instructions. Is the program stuck in a loop?`; stop(); return render(); }
+        m.ir = m.mem[m.pc]; m.touched = m.pc;
+        m.msg = `Fetch: copy the byte at address ${m.pc} (${hex(m.ir)}) into IR, then add 1 to PC.`;
+        m.pc = (m.pc + 1) & 15; m.changed = new Set(['ir', 'pc']);
+      } else if (m.phase === 1) {
+        const op = m.ir >> 4, arg = m.ir & 15;
+        m.msg = op > 8 ? `Decode: opcode ${op} isn't an instruction this CPU knows.`
+          : `Decode: ${hex(m.ir)} is opcode ${op} (${NAMES[op]})` + (NO_ARG.has(op) ? ', which takes no operand.' : ` with operand ${arg}: ${asm(m.ir)}.`);
+      } else {
+        execute(); m.count++;
+      }
+      m.phase = (m.phase + 1) % 3;
+      render();
+    }
+
+    function execute() {
+      const op = m.ir >> 4, arg = m.ir & 15, v = m.mem[arg];
+      switch (op) {
+        case 0: m.halted = true; m.msg = 'Execute: HLT. The machine stops.'; break;
+        case 1: m.a = v; m.touched = arg; m.changed.add('a'); m.msg = `Execute: copy the byte at address ${arg} (${v}) into A.`; break;
+        case 2: m.a = (m.a + v) & 255; m.z = m.a === 0; m.touched = arg; m.changed.add('a').add('z'); m.msg = `Execute: the ALU adds ${v} from address ${arg}. A is now ${m.a}.`; break;
+        case 3: m.a = (m.a - v) & 255; m.z = m.a === 0; m.touched = arg; m.changed.add('a').add('z'); m.msg = `Execute: the ALU subtracts ${v} from address ${arg}. A is now ${m.a}${m.z ? ', so Z is set' : ''}.`; break;
+        case 4: m.mem[arg] = m.a; m.touched = arg; m.msg = `Execute: write A (${m.a}) into address ${arg}.`; break;
+        case 5: m.a = arg; m.changed.add('a'); m.msg = `Execute: put the operand itself, ${arg}, into A.`; break;
+        case 6: m.pc = arg; m.changed.add('pc'); m.msg = `Execute: jump. PC is set to ${arg}, so that's where the next fetch happens.`; break;
+        case 7:
+          if (m.z) { m.pc = arg; m.changed.add('pc'); m.msg = `Execute: Z is set, so jump. PC is set to ${arg}.`; }
+          else m.msg = `Execute: Z isn't set, so don't jump. PC stays at ${m.pc}.`;
+          break;
+        case 8: m.out.push(m.a); m.msg = `Execute: output A, which is ${m.a}.`; break;
+        default: m.halted = true; m.msg = `Execute: unknown opcode ${op}. A real CPU would raise an "illegal instruction" fault; this one stops.`;
+      }
+    }
+
+    function instruction() { if (m.halted) return; do step(); while (m.phase !== 0 && !m.halted); }
+    function stop() { clearInterval(timer); timer = null; $('run').textContent = 'Run'; }
+
+    function render() {
+      cells.forEach((c, i) => {
+        const input = c.querySelector('input');
+        if (document.activeElement !== input) input.value = hex(m.mem[i]);
+        c.querySelector('.asm').textContent = asm(m.mem[i]);
+        c.classList.toggle('pc', i === m.pc && !m.halted);
+        c.classList.toggle('touched', i === m.touched);
+      });
+      [...$('phases').children].forEach((s, i) => s.classList.toggle('now', !m.halted && m.ir !== null && i === (m.phase + 2) % 3));
+      const row = (k, label, val, note) => `<dt>${label}</dt><dd class="${m.changed.has(k) ? 'changed' : ''}">${val} <small>${note}</small></dd>`;
+      $('regs').innerHTML =
+        row('pc', 'PC', m.pc, 'address of the next instruction') +
+        row('ir', 'IR', m.ir === null ? '--' : hex(m.ir), m.ir === null ? 'instruction register' : asm(m.ir)) +
+        row('a', 'A', m.a, `${m.a.toString(2).padStart(8, '0')}`) +
+        row('z', 'Z', m.z ? 1 : 0, 'set when the last ADD or SUB gave 0');
+      $('explain').textContent = m.msg;
+      $('out').textContent = 'Output: ' + (m.out.length ? (m.out.length > 12 ? '…, ' : '') + m.out.slice(-12).join(', ') : '(nothing yet)');
+      $('step').disabled = $('step-ins').disabled = $('run').disabled = m.halted;
+    }
+
+    $('step').onclick = () => { stop(); step(); };
+    $('step-ins').onclick = () => { stop(); instruction(); };
+    $('run').onclick = () => {
+      if (timer) return stop();
+      $('run').textContent = 'Pause';
+      m.count = 0;
+      timer = setInterval(() => { instruction(); if (m.halted || !timer) stop(); }, 250);
+    };
+    $('reset').onclick = reset;
+    reset();
+  })();
+</script>
+</body>
+</html>
