@@ -172,6 +172,37 @@ pre code { background: none; padding: 0; }
 .bits-row { display: inline-flex; gap: .3rem; }
 .mini { font: 700 1.05rem var(--mono); width: 2.1rem; height: 2.4rem; border: 2px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); cursor: pointer; }
 .mini[aria-pressed="true"] { background: var(--hl); color: var(--hl-ink); }
+/* Segmented choice buttons (pick a program, an operation, ...) */
+.seg { display: flex; flex-wrap: wrap; gap: .4rem; }
+.seg button { font: 600 .9rem var(--sans); padding: .35em .8em; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+/* Code tracer (assets/tracer.js) */
+.tr-body { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 1rem; margin: 1rem 0 .6rem; }
+@media (max-width: 700px) { .tr-body { grid-template-columns: 1fr; } }
+.tr-code { margin: 0; padding: .6rem 0; background: var(--code-bg); border-radius: 8px; font: .88rem/1.7 var(--mono); counter-reset: ln; list-style: none; overflow-x: auto; }
+.tr-code li { counter-increment: ln; padding: 0 .8rem 0 0; white-space: pre; border-left: 4px solid transparent; }
+.tr-code li::before { content: counter(ln); display: inline-block; width: 2.2em; text-align: right; margin-right: .9em; color: var(--pencil); }
+.tr-code li code { background: none; padding: 0; font-size: 1em; }
+.tr-code li.now { background: var(--hl); color: var(--hl-ink); border-left-color: var(--ink); }
+.tr-code li.now::before { color: var(--hl-ink); }
+.tr-cap { font: 600 .8rem var(--sans); color: var(--ink-2); margin: 0 0 .3rem; }
+.tr-frames { display: grid; gap: .4rem; margin-bottom: .8rem; }
+.tr-frame { border: 1.5px solid var(--rule); border-radius: 6px; padding: .4rem .6rem; background: var(--paper); }
+.tr-frame.top { border-color: var(--ink); }
+.tr-fn { font: 700 .85rem var(--mono); margin-bottom: .2rem; }
+.tr-frame dl { display: grid; grid-template-columns: auto 1fr; gap: .15rem .7rem; margin: 0; align-items: baseline; }
+.tr-frame dt { font: .85rem var(--mono); color: var(--ink-2); }
+.tr-frame dd { margin: 0; justify-self: start; border-radius: 3px; padding: 0 .25rem; overflow-wrap: anywhere; }
+.tr-frame dd code { background: none; padding: 0; }
+.tr-frame dd.changed { background: var(--hl); color: var(--hl-ink); }
+.tr-tag { font: .72rem var(--sans); border: 1px solid currentColor; border-radius: 99px; padding: 0 .4rem; margin-left: .4rem; white-space: nowrap; }
+.tr-empty, .tr-ret { font: .85rem var(--sans); color: var(--ink-2); margin: 0; }
+.tr-ret { margin-top: .3rem; font-weight: 600; color: var(--ink); }
+.tr-out { margin: 0; min-height: 2.6em; padding: .5rem .8rem; }
+.tr-msg { font: .95rem var(--sans); margin: 0 0 .6rem; min-height: 1.4em; }
+.tr-controls { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+.tr-controls input[type=range] { flex: 1 1 8rem; accent-color: var(--ink); }
+.tr-count { font: .85rem var(--sans); color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .lesson-head { padding: 3.5rem 0 1rem; }
 .lesson-head .crumb { font: .92rem var(--sans); color: var(--ink-2); margin-bottom: 1rem; }
 .lesson-head .lede { font-size: 1.2rem; color: var(--ink-2); max-width: 60ch; }

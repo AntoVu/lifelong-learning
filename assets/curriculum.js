@@ -10,7 +10,7 @@ window.CURRICULUM = [
       { id: 'bits', title: 'Bits, bytes, and how everything becomes a number', href: 'lessons/01-bits-and-bytes.html', minutes: 45 },
       { id: 'gates', title: 'From logic gates to a CPU', href: 'lessons/02-gates-to-cpu.html', minutes: 55 },
       { id: 'fetch', title: 'How a program actually runs', href: 'lessons/03-how-programs-run.html', minutes: 45 },
-      { id: 'first-programs', title: 'Values, variables, and control flow' },
+      { id: 'first-programs', title: 'Values, variables, and control flow', href: 'lessons/04-values-and-control-flow.html', minutes: 45 },
       { id: 'functions', title: 'Functions and abstraction' },
     ],
   },

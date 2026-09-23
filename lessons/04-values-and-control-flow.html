@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Values, variables, and control flow | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .side { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+  .side pre { margin: 0; }
+  .side h4 { font: 600 .9rem var(--sans); color: var(--ink-2); margin: 0 0 .4rem; }
+  .types td:first-child, .types td:nth-child(2) { font-family: var(--mono); white-space: nowrap; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 1: How computers work, lesson 4 of 5</div>
+    <h1>Values, variables, and control flow</h1>
+    <p class="lede">You've seen how a CPU runs instructions. Now climb up to the code you actually write. This lesson covers the core of every program, in Python: values, the names that point at them, and the <code>if</code> statements and loops that decide which line runs next.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="tr-title">
+    <h2 id="tr-title" style="margin-top:0;font-size:1.25rem">Trace a program</h2>
+    <div class="try">Pick a program and press Next step. The yellow line is about to run; yellow values just changed.</div>
+    <div id="tracer"></div>
+  </section>
+  <p>Tracing code by hand like this, line by line and keeping track of every variable, is the most useful debugging skill there is. Each section below has a program on the tracer to go with it.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Name Python's basic types and predict what an expression evaluates to.</li>
+      <li>Explain what assignment really does, and why two names can share one list.</li>
+      <li>Use <code>and</code>, <code>or</code>, and <code>not</code>, including short-circuiting.</li>
+      <li>Write <code>if</code>/<code>elif</code>/<code>else</code> chains in the right order.</li>
+      <li>Choose between <code>while</code> and <code>for</code>, and avoid off-by-one errors.</li>
+      <li>Trace a loop by hand and say how many times its body runs.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#values">Values and types</a></li>
+      <li><a href="#names">Variables are names, not boxes</a></li>
+      <li><a href="#logic">True, false, and short circuits</a></li>
+      <li><a href="#branching">Branching</a></li>
+      <li><a href="#loops">Loops</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="values">Values and types</h2>
+  <p>Every value in Python has a <span class="hl">type</span>, which decides what you can do with it. These are the ones you'll use constantly:</p>
+  <div class="table-scroll">
+  <table class="types">
+    <thead><tr><th>Type</th><th>Examples</th><th>Under the hood (lessons 1 to 3)</th></tr></thead>
+    <tbody>
+      <tr><td>int</td><td>42, -7, 0xFF</td><td>Whole numbers. Python grows them as needed, so they never overflow.</td></tr>
+      <tr><td>float</td><td>3.5, 0.1, 1e9</td><td>64-bit IEEE 754 floating point, with all the rounding from lesson 1.</td></tr>
+      <tr><td>str</td><td>"hi", 'café'</td><td>A sequence of Unicode characters, stored as UTF-8 when written to a file.</td></tr>
+      <tr><td>bool</td><td>True, False</td><td>One bit of meaning. In Python it's a kind of int: <code>True + True</code> is 2.</td></tr>
+      <tr><td>NoneType</td><td>None</td><td>"No value here." Functions with no <code>return</code> give back None.</td></tr>
+      <tr><td>list</td><td>[1, 2, 3]</td><td>An ordered collection you can change. More on lists below.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Python's ints are unusual. In Java, an <code>int</code> is 32 bits and wraps around exactly like the 8-bit register in lesson 3 (in C, overflowing a signed int is undefined behavior, which is worse). Python quietly switches to as many bits as it needs, so <code>2 ** 100</code> is 1267650600228229401496703205376, exactly. Floats get no such treatment: they're the hardware's 64-bit floats, so <code>0.1 + 0.2</code> is still 0.30000000000000004.</p>
+  <p>Division has two forms. <code>/</code> always gives a float: <code>7 / 2</code> is 3.5. <code>//</code> is floor division, which rounds down to a whole number: <code>7 // 2</code> is 3. "Down" means toward negative infinity, which surprises people coming from C and Java, where integer division rounds toward zero.</p>
+
+  <div class="problem" data-id="prog-p1" data-answer="-4|−4">
+    <span class="qtag">Practice 1</span>
+    <p class="q">What does <code>-7 // 2</code> evaluate to in Python?</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>−7 ÷ 2 is −3.5. Floor division rounds down, toward negative infinity.</details>
+    <div class="solution" hidden><p><strong>−4</strong>. Rounding −3.5 down gives −4, not −3. In C and Java, <code>-7 / 2</code> is −3, because they round toward zero. If you port code between languages, this is a classic source of bugs, for example in code that computes which page or bucket a negative index falls into.</p></div>
+  </div>
+
+  <div class="mcq" data-id="prog-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">Which line prints <code>False</code>?</p>
+    <div class="choices">
+      <button type="button" data-why="7 / 2 is 3.5 exactly; both sides are the same float.">print(7 / 2 == 3.5)</button>
+      <button type="button">print(0.1 + 0.2 == 0.3)</button>
+      <button type="button" data-why="Python ints don't overflow, so this is exact.">print(2 ** 64 == 18446744073709551616)</button>
+      <button type="button" data-why="bool is a kind of int, so True + True is 2.">print(True + True == 2)</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong><code>0.1 + 0.2 == 0.3</code></strong> is False, because neither 0.1 nor 0.2 is exact in binary (lesson 1). Compare floats with a tolerance instead: <code>math.isclose(0.1 + 0.2, 0.3)</code> is True.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="names">Variables are names, not boxes</h2>
+  <p>It's common to picture a variable as a box holding a value. In Python, a better picture is a <strong>name tag</strong> tied to a value. Assignment, <code>x = 5</code>, means "make the name <code>x</code> point at the value 5". It doesn't copy anything.</p>
+  <p>That explains a line that looks wrong to anyone who knows algebra: <code>x = x + 1</code>. Python works out the right side first, using the current value of <code>x</code>, makes a new value, and then moves the name <code>x</code> to point at it. Run the "Names and values" program on the tracer and watch <code>y</code> stay at 5 when <code>x</code> moves to 6.</p>
+
+  <figure class="figure">
+    <svg viewBox="0 0 560 200" role="img" aria-labelledby="nm-t" style="max-width:600px">
+      <title id="nm-t">After the Names and values program: x points to 6, y points to 5, and both nums and same point to one list holding 1, 2, 3.</title>
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/></marker></defs>
+      <text x="40" y="20" class="gsmall">names</text>
+      <text x="300" y="20" class="gsmall">values</text>
+      <g class="mono" font-size="15">
+        <rect x="30" y="32" width="90" height="30" rx="5" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="75" y="52" text-anchor="middle">x</text>
+        <rect x="30" y="76" width="90" height="30" rx="5" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="75" y="96" text-anchor="middle">y</text>
+        <rect x="30" y="120" width="90" height="30" rx="5" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="75" y="140" text-anchor="middle">nums</text>
+        <rect x="30" y="160" width="90" height="30" rx="5" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="75" y="180" text-anchor="middle">same</text>
+        <rect x="290" y="32" width="60" height="30" rx="15" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.5"/><text x="320" y="52" text-anchor="middle">6</text>
+        <rect x="290" y="76" width="60" height="30" rx="15" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.5"/><text x="320" y="96" text-anchor="middle">5</text>
+        <rect x="290" y="135" width="150" height="40" rx="6" fill="var(--hl)" stroke="var(--ink)" stroke-width="2"/><text x="365" y="160" text-anchor="middle" fill="#1b2a41">[1, 2, 3]</text>
+      </g>
+      <g fill="none" stroke="var(--ink)" stroke-width="1.8"><path d="M120,47 H286" marker-end="url(#arr)"/><path d="M120,91 H286" marker-end="url(#arr)"/><path d="M120,135 C200,135 220,148 286,150" marker-end="url(#arr)"/><path d="M120,175 C200,175 220,162 286,160" marker-end="url(#arr)"/></g>
+      <text x="450" y="160" class="gsmall">one list,</text>
+      <text x="450" y="176" class="gsmall">two names</text>
+    </svg>
+    <figcaption>After the "Names and values" program. <code>same = nums</code> didn't copy the list; it tied a second name to the same one. So <code>same.append(3)</code> changes what <code>nums</code> sees too.</figcaption>
+  </figure>
+
+  <p>For numbers and strings this difference never shows, because they can't be changed in place (they're <span class="hl">immutable</span>). <code>x = x + 1</code> builds a new number. Lists are <span class="hl">mutable</span>: <code>append</code> changes the list itself, and every name pointing at it sees the change. Two names for one object is called <span class="hl">aliasing</span>. When you actually want a separate copy, ask for one: <code>same = nums.copy()</code>.</p>
+
+  <div class="mcq" data-id="prog-q2" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">What does this print?</p>
+<pre><code>a = ["x"]
+b = a
+b = b + ["y"]
+print(a)</code></pre>
+    <div class="choices">
+      <button type="button" data-why="That would be true for b.append(&quot;y&quot;), which changes the list in place. Read the third line again.">['x', 'y']</button>
+      <button type="button" data-why="Nothing removes the element from a's list.">[]</button>
+      <button type="button">['x']</button>
+      <button type="button" data-why="b + [&quot;y&quot;] is a perfectly valid list concatenation.">An error</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>['x']</strong>. <code>b + ["y"]</code> builds a <em>new</em> list, and the assignment moves <code>b</code> to it. <code>a</code> still points at the original, unchanged. Compare <code>b.append("y")</code>, which would change the shared list and print <code>['x', 'y']</code>. The rule: assignment moves a name; methods like <code>append</code> change an object.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="logic">True, false, and short circuits</h2>
+  <p>Comparisons like <code>==</code>, <code>!=</code>, <code>&lt;</code>, and <code>&gt;=</code> produce a bool. You combine bools with <code>and</code>, <code>or</code>, and <code>not</code>, the AND, OR, and NOT gates from lesson 2. Python also lets you chain comparisons: <code>0 &lt; x &lt; 10</code> means <code>0 &lt; x and x &lt; 10</code>.</p>
+  <p>Python is relaxed about what counts as true. In a condition, these values count as false ("falsy"): <code>False</code>, <code>None</code>, <code>0</code>, <code>0.0</code>, the empty string <code>""</code>, and empty collections like <code>[]</code>. Everything else counts as true. That's why <code>if items:</code> is the usual way to ask "is this list non-empty?"</p>
+  <p><code>and</code> and <code>or</code> also <span class="hl">short-circuit</span>: they stop as soon as the answer is known. If the left side of <code>and</code> is false, the right side never runs. That isn't only a speed trick. It lets the left side guard the right:</p>
+<pre><code>if count != 0 and total / count &gt; 10:   # never divides by zero
+    ...</code></pre>
+  <p>One more detail: <code>and</code> and <code>or</code> return one of their operands, not necessarily True or False. <code>x or y</code> gives back <code>x</code> if it's truthy, and <code>y</code> otherwise. People use that for defaults: <code>name = user_input or "Anonymous"</code>.</p>
+
+  <div class="problem" data-id="prog-p2" data-answer="default|'default'|&quot;default&quot;">
+    <span class="qtag">Practice 2</span>
+    <p class="q">What does <code>print(0 or "default")</code> print?</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Is 0 truthy or falsy? <code>or</code> returns the first truthy operand, or the last one.</details>
+    <div class="solution" hidden><p><strong>default</strong>. 0 is falsy, so <code>or</code> moves on and returns <code>"default"</code>. Watch for this in real code: <code>volume = setting or 50</code> replaces a deliberate setting of 0 with 50. When 0 is a valid value, write <code>50 if setting is None else setting</code>.</p></div>
+  </div>
+
+  <div class="mcq" data-id="prog-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q"><code>user</code> might be <code>None</code>. Which condition can never crash with an error about <code>None</code>?</p>
+    <div class="choices">
+      <button type="button" data-why="If user is None, the left side runs first and fails.">user.is_admin and user is not None</button>
+      <button type="button" data-why="If user is None, the left side is False, so or goes on to evaluate the right side, which fails.">user is not None or user.is_admin</button>
+      <button type="button" data-why="Precedence doesn't help: user.is_admin still runs whenever user is None.">not user is None or user.is_admin</button>
+      <button type="button">user is not None and user.is_admin</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong><code>user is not None and user.is_admin</code></strong>. When <code>user</code> is None, the left side is False, <code>and</code> stops, and <code>user.is_admin</code> never runs. Order matters: put the guard first.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="branching">Branching</h2>
+  <p>An <code>if</code> statement runs a block only when its condition is true. <code>elif</code> ("else if") adds more conditions, and <code>else</code> catches everything left over. Python checks them <strong>from top to bottom and runs only the first match</strong>. Then it skips to the end of the whole chain. Run "Branching" on the tracer and notice that lines 3, 6, and 7 never light up.</p>
+  <p>Python uses indentation to mark which lines belong to a block, where most other languages use braces. Under the hood, each <code>if</code> becomes a compare and a conditional jump, like <code>JZ</code> in lesson 3: if the condition is false, jump past the block.</p>
+
+  <div class="mcq" data-id="prog-q4" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">Someone reorders the Branching program's conditions. What does it print when <code>temp = 95</code>?</p>
+<pre><code>if temp &gt;= 60:
+    advice = "go for a walk"
+elif temp &gt;= 90:
+    advice = "stay inside"
+else:
+    advice = "bring a jacket"</code></pre>
+    <div class="choices">
+      <button type="button">go for a walk</button>
+      <button type="button" data-why="Only the first true condition runs, and 95 >= 60 is checked first.">stay inside</button>
+      <button type="button" data-why="else only runs when nothing above matched.">bring a jacket</button>
+      <button type="button" data-why="An if/elif chain runs at most one block.">go for a walk, then stay inside</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>go for a walk</strong>. 95 ≥ 60 is true, so the first block runs and the rest of the chain is skipped. The <code>temp &gt;= 90</code> branch can now never run: any temperature that reaches it already failed <code>temp &gt;= 60</code>. When ranges overlap, check the narrowest one first.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="loops">Loops</h2>
+  <p>A <code>while</code> loop repeats its block as long as its condition is true. It's the right tool when you don't know in advance how many times to go around. "While loop" on the tracer adds up the digits of 472 by peeling off the last digit (<code>n % 10</code>) and then dropping it (<code>n // 10</code>), until nothing is left.</p>
+  <p>Here's that loop compiled to Python bytecode. It's the Countdown pattern from lesson 3: a conditional jump out of the loop, and a jump backward to the test.</p>
+<pre><code>  3   L1:     LOAD_NAME                0 (n)
+              LOAD_SMALL_INT           0
+              COMPARE_OP             148 (bool(&gt;))
+              POP_JUMP_IF_FALSE       28 (to L2)     # leave the loop
+  ...         (the loop body, lines 4 and 5)
+              JUMP_BACKWARD           34 (to L1)     # go back to the test</code></pre>
+
+  <div class="problem" data-id="prog-p3" data-answer="13">
+    <span class="qtag">Practice 3</span>
+    <p class="q">What does the "While loop" program print? Work it out by hand first, then check it on the tracer.</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Write a small table with columns <code>n</code> and <code>total</code>, and add a row each time around the loop.</details>
+    <div class="solution" hidden><p><strong>13</strong> = 2 + 7 + 4. The table: (472, 0) → (47, 2) → (4, 9) → (0, 13). The body runs three times, once per digit, and the test <code>n &gt; 0</code> runs four times; the last one is false.</p></div>
+  </div>
+
+  <p>A <code>for</code> loop goes through the items of a collection one at a time. "For loop" on the tracer finds the highest score by checking each one. Use <code>for</code> whenever you're walking through something: a list, the characters of a string, the lines of a file. It can't accidentally loop forever, and there's no counter to get wrong.</p>
+  <p>To loop over numbers, use <code>range</code>. <code>range(start, stop, step)</code> starts at <code>start</code> and stops <strong>before</strong> <code>stop</code>. So <code>range(5)</code> is 0, 1, 2, 3, 4: five numbers, matching how list indexes start at 0. Getting the end wrong by one is so common it has a name, the <span class="hl">off-by-one error</span>.</p>
+
+  <div class="problem" data-id="prog-p4" data-answer="258|2 5 8">
+    <span class="qtag">Practice 4</span>
+    <p class="q">What numbers does <code>for i in range(2, 10, 3): print(i)</code> print? List them in order.</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off" placeholder="e.g. 1, 2, 3"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Start at 2 and add 3 each time. Stop before reaching 10.</details>
+    <div class="solution" hidden><p><strong>2, 5, 8</strong>. The next value would be 11, which isn't below 10, so the loop ends.</p></div>
+  </div>
+
+  <p>Two keywords change a loop's flow from inside. <code>break</code> leaves the loop immediately. <code>continue</code> skips the rest of this pass and goes on to the next one.</p>
+
+  <div class="problem" data-id="prog-p5" data-answer="5050">
+    <span class="qtag">Practice 5</span>
+    <p class="q">What does this print?</p>
+<pre><code>total = 0
+for i in range(1, 101):
+    total += i
+print(total)</code></pre>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>It adds 1 + 2 + ... + 100. Does 101 get added? Pair the first and last numbers: 1 + 100, 2 + 99, ...</details>
+    <div class="solution" hidden><p><strong>5050</strong>: 50 pairs that each add to 101. <code>range(1, 101)</code> stops at 100, which is exactly why the stop value is 101. Python can also do this in one line: <code>sum(range(1, 101))</code>.</p></div>
+  </div>
+
+  <div class="mcq" data-id="prog-q5" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">Which loop never ends?</p>
+    <div class="choices">
+      <button type="button" data-why="i goes 0, 1, 2, 3, then i < 3 is false.">i = 0<br>while i &lt; 3: i += 1</button>
+      <button type="button">i = 0<br>while i != 5: i += 2</button>
+      <button type="button" data-why="A for loop over a range always ends.">for i in range(1000000): pass</button>
+      <button type="button" data-why="i goes 10, 7, 4, 1, -2, and then i > 0 is false.">i = 10<br>while i &gt; 0: i -= 3</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong><code>while i != 5</code></strong> with steps of 2. <code>i</code> goes 0, 2, 4, 6, 8, ... and jumps right over 5. It's the same trap as the Countdown program subtracting 2 in lesson 3, except Python ints don't wrap around, so it never stops. Prefer <code>&lt;</code> or <code>&gt;</code> over <code>!=</code> in loop conditions.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>The Zune freeze, December 31, 2008</h3>
+    <p>At midnight going into the last day of 2008, every Microsoft Zune 30 music player froze. The clock code turned a count of days since 1980 into a year with a loop like this:</p>
+<pre><code>while (days &gt; 365) {
+    if (IsLeapYear(year)) {
+        if (days &gt; 366) { days -= 366; year += 1; }
+    } else {
+        days -= 365; year += 1;
+    }
+}</code></pre>
+    <p>On day 366 of a leap year, <code>days</code> was exactly 366. The outer test was true, but the inner test was false, so nothing changed, and the loop ran forever. The fix for owners was to wait: on January 1, the count moved past it and the players started normally. Tracing that one input by hand would have found it.</p>
+  </div>
+  <div class="story">
+    <h3>Apple's "goto fail", 2014</h3>
+    <p>Apple's code for checking secure connections had a series of <code>if</code> statements, each one jumping to the error handler on failure. A duplicated line slipped in:</p>
+<pre><code>if ((err = SSLHashSHA1.update(&amp;hashCtx, &amp;signedParams)) != 0)
+    goto fail;
+    goto fail;   /* always runs: it isn't part of the if */</code></pre>
+    <p>Without braces, only the first <code>goto fail</code> belongs to the <code>if</code>. The second always runs, skipping the final signature check while <code>err</code> still said "no error". For over a year, iPhones and Macs accepted forged certificates for these connections. Python's indentation rules make this exact mistake impossible, and many style guides for C-like languages now require braces on every <code>if</code>.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Every value has a type. Python ints never overflow; floats are the hardware's 64-bit floats.</li>
+    <li><code>/</code> gives a float. <code>//</code> rounds down, toward negative infinity.</li>
+    <li>Assignment ties a name to a value. It never copies. Two names can share one mutable object.</li>
+    <li><code>and</code> and <code>or</code> short-circuit. Put the guard first.</li>
+    <li>An <code>if</code>/<code>elif</code> chain runs only the first match. Check narrow cases first.</li>
+    <li>Use <code>for</code> to walk through things and <code>while</code> when you don't know how many passes you need. <code>range</code> stops before its end.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>The classic first interview question, FizzBuzz, uses everything in this lesson. Predict the first 15 lines, then run it:</p>
+<pre><code>for n in range(1, 16):
+    if n % 15 == 0:        # check the narrowest case first
+        print("FizzBuzz")
+    elif n % 3 == 0:
+        print("Fizz")
+    elif n % 5 == 0:
+        print("Buzz")
+    else:
+        print(n)</code></pre>
+  <p>To trace any program of your own the way the tracer does, paste it into Python Tutor, linked below.</p>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 4</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="first-programs">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Functions and abstraction</strong>, where you'll watch the call stack grow and shrink as functions call each other.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://pythontutor.com/" target="_blank" rel="noopener">Python Tutor</a><span>Paste in any short program and step through it, with arrows from names to values. The inspiration for this lesson's tracer.</span></li>
+      <li><a href="https://docs.python.org/3/tutorial/introduction.html" target="_blank" rel="noopener">The Python Tutorial: An informal introduction</a><span>Numbers, strings, and lists, from the official docs.</span></li>
+      <li><a href="https://docs.python.org/3/tutorial/controlflow.html" target="_blank" rel="noopener">The Python Tutorial: More control flow tools</a><span><code>if</code>, <code>for</code>, <code>range</code>, <code>break</code>, <code>continue</code>, and <code>match</code>.</span></li>
+      <li><a href="https://docs.python.org/3/library/stdtypes.html#truth-value-testing" target="_blank" rel="noopener">Python docs: Truth value testing</a><span>The exact list of values that count as false.</span></li>
+      <li><a href="https://nedbatchelder.com/text/names.html" target="_blank" rel="noopener">Ned Batchelder: Facts and myths about Python names and values</a><span>The clearest explanation of names, values, and aliasing. Well worth the read.</span></li>
+      <li><a href="https://ocw.mit.edu/courses/6-100l-introduction-to-cs-and-programming-using-python-fall-2022/" target="_blank" rel="noopener">MIT 6.100L: Introduction to CS and Programming Using Python</a><span>Lectures 1 to 4 cover the same ground: types, branching, and loops.</span></li>
+      <li><a href="https://cs50.harvard.edu/python/" target="_blank" rel="noopener">Harvard CS50's Introduction to Programming with Python</a><span>Free lectures and problem sets. Weeks 0 to 2 match this lesson.</span></li>
+      <li><a href="https://cs61a.org/" target="_blank" rel="noopener">Berkeley CS61A</a><span>Where stage 2 picks up. Its environment diagrams are the same idea as the tracer.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Zune" target="_blank" rel="noopener">Zune (Wikipedia)</a><span>The player's history, including the 2008 leap-year freeze.</span></li>
+      <li><a href="https://www.imperialviolet.org/2014/02/22/applebug.html" target="_blank" rel="noopener">Adam Langley: Apple's SSL/TLS bug</a><span>A security engineer's walkthrough of "goto fail", written the week it was found.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script src="../assets/tracer.js"></script>
+<script>
+  // Recorded by running each program under sys.settrace (Python 3.14).
+  const TRACES = {"Names and values": {"code": "x = 5\ny = x\nx = x + 1\nnums = [1, 2]\nsame = nums\nsame.append(3)\nprint(x, y, nums)", "steps": [{"line": 1, "frames": [{"fn": "global", "vars": []}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["x", "5", null]]}], "out": ""}, {"line": 3, "frames": [{"fn": "global", "vars": [["x", "5", null], ["y", "5", null]]}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["x", "6", null], ["y", "5", null]]}], "out": ""}, {"line": 5, "frames": [{"fn": "global", "vars": [["x", "6", null], ["y", "5", null], ["nums", "[1, 2]", "list #1"]]}], "out": ""}, {"line": 6, "frames": [{"fn": "global", "vars": [["x", "6", null], ["y", "5", null], ["nums", "[1, 2]", "list #1"], ["same", "[1, 2]", "list #1"]]}], "out": ""}, {"line": 7, "frames": [{"fn": "global", "vars": [["x", "6", null], ["y", "5", null], ["nums", "[1, 2, 3]", "list #1"], ["same", "[1, 2, 3]", "list #1"]]}], "out": ""}, {"line": 0, "frames": [{"fn": "global", "vars": [["x", "6", null], ["y", "5", null], ["nums", "[1, 2, 3]", "list #1"], ["same", "[1, 2, 3]", "list #1"]]}], "out": "6 5 [1, 2, 3]\n"}]}, "Branching": {"code": "temp = 75\nif temp >= 90:\n    advice = \"stay inside\"\nelif temp >= 60:\n    advice = \"go for a walk\"\nelse:\n    advice = \"bring a jacket\"\nprint(advice)", "steps": [{"line": 1, "frames": [{"fn": "global", "vars": []}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["temp", "75", null]]}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["temp", "75", null]]}], "out": ""}, {"line": 5, "frames": [{"fn": "global", "vars": [["temp", "75", null]]}], "out": ""}, {"line": 8, "frames": [{"fn": "global", "vars": [["temp", "75", null], ["advice", "'go for a walk'", null]]}], "out": ""}, {"line": 0, "frames": [{"fn": "global", "vars": [["temp", "75", null], ["advice", "'go for a walk'", null]]}], "out": "go for a walk\n"}]}, "While loop": {"code": "n = 472\ntotal = 0\nwhile n > 0:\n    total = total + n % 10\n    n = n // 10\nprint(total)", "steps": [{"line": 1, "frames": [{"fn": "global", "vars": []}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["n", "472", null]]}], "out": ""}, {"line": 3, "frames": [{"fn": "global", "vars": [["n", "472", null], ["total", "0", null]]}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["n", "472", null], ["total", "0", null]]}], "out": ""}, {"line": 5, "frames": [{"fn": "global", "vars": [["n", "472", null], ["total", "2", null]]}], "out": ""}, {"line": 3, "frames": [{"fn": "global", "vars": [["n", "47", null], ["total", "2", null]]}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["n", "47", null], ["total", "2", null]]}], "out": ""}, {"line": 5, "frames": [{"fn": "global", "vars": [["n", "47", null], ["total", "9", null]]}], "out": ""}, {"line": 3, "frames": [{"fn": "global", "vars": [["n", "4", null], ["total", "9", null]]}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["n", "4", null], ["total", "9", null]]}], "out": ""}, {"line": 5, "frames": [{"fn": "global", "vars": [["n", "4", null], ["total", "13", null]]}], "out": ""}, {"line": 3, "frames": [{"fn": "global", "vars": [["n", "0", null], ["total", "13", null]]}], "out": ""}, {"line": 6, "frames": [{"fn": "global", "vars": [["n", "0", null], ["total", "13", null]]}], "out": ""}, {"line": 0, "frames": [{"fn": "global", "vars": [["n", "0", null], ["total", "13", null]]}], "out": "13\n"}]}, "For loop": {"code": "scores = [72, 95, 88]\nbest = scores[0]\nfor s in scores:\n    if s > best:\n        best = s\nprint(best)", "steps": [{"line": 1, "frames": [{"fn": "global", "vars": []}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["scores", "[72, 95, 88]", "list #1"]]}], "out": ""}, {"line": 3, "frames": [{"fn": "global", "vars": [["scores", "[72, 95, 88]", "list #1"], ["best", "72", null]]}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["scores", "[72, 95, 88]", "list #1"], ["best", "72", null], ["s", "72", null]]}], "out": ""}, {"line": 3, "frames": [{"fn": "global", "vars": [["scores", "[72, 95, 88]", "list #1"], ["best", "72", null], ["s", "72", null]]}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["scores", "[72, 95, 88]", "list #1"], ["best", "72", null], ["s", "95", null]]}], "out": ""}, {"line": 5, "frames": [{"fn": "global", "vars": [["scores", "[72, 95, 88]", "list #1"], ["best", "72", null], ["s", "95", null]]}], "out": ""}, {"line": 3, "frames": [{"fn": "global", "vars": [["scores", "[72, 95, 88]", "list #1"], ["best", "95", null], ["s", "95", null]]}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["scores", "[72, 95, 88]", "list #1"], ["best", "95", null], ["s", "88", null]]}], "out": ""}, {"line": 3, "frames": [{"fn": "global", "vars": [["scores", "[72, 95, 88]", "list #1"], ["best", "95", null], ["s", "88", null]]}], "out": ""}, {"line": 6, "frames": [{"fn": "global", "vars": [["scores", "[72, 95, 88]", "list #1"], ["best", "95", null], ["s", "88", null]]}], "out": ""}, {"line": 0, "frames": [{"fn": "global", "vars": [["scores", "[72, 95, 88]", "list #1"], ["best", "95", null], ["s", "88", null]]}], "out": "95\n"}]}};
+  Tracer.mount(document.getElementById('tracer'), TRACES);
+</script>
+</body>
+</html>

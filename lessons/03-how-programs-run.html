@@ -10,10 +10,6 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
 <link rel="stylesheet" href="../assets/style.css">
 <style>
-  .seg { display: flex; flex-wrap: wrap; gap: .4rem; }
-  .seg button { font: 600 .9rem var(--sans); padding: .35em .8em; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); cursor: pointer; }
-  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
-
   .machine { display: flex; flex-wrap: wrap; gap: 1.4rem; margin: 1rem 0; align-items: flex-start; }
   .mem { display: grid; grid-template-columns: repeat(4, 4.2rem); gap: .35rem; }
   .cell { border: 1.5px solid var(--rule); border-radius: 6px; padding: .25rem .3rem .3rem; background: var(--paper); text-align: center; }
@@ -408,7 +404,7 @@ run([0x53, 0x80, 0x3F, 0x75, 0x61, 0x00] + [0] * 9 + [1])  # Countdown: 3 2 1</c
     <h2 style="margin-top:0">Finish lesson 3</h2>
     <p class="finish-note"></p>
     <button class="btn" type="button" data-finish="fetch">Finish lesson</button>
-    <p style="margin:1.2rem 0 0">Next: <strong>Values, variables, and control flow</strong>, where you trace real Python programs line by line and see the loops and jumps from this lesson in the code you write.</p>
+    <p style="margin:1.2rem 0 0">Next: <a href="04-values-and-control-flow.html"><strong>Values, variables, and control flow</strong></a>, where you trace real Python programs line by line and see the loops and jumps from this lesson in the code you write.</p>
   </section>
 
   <section class="refs" aria-labelledby="refs-title">
