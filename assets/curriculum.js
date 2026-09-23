@@ -11,7 +11,7 @@ window.CURRICULUM = [
       { id: 'gates', title: 'From logic gates to a CPU', href: 'lessons/02-gates-to-cpu.html', minutes: 55 },
       { id: 'fetch', title: 'How a program actually runs', href: 'lessons/03-how-programs-run.html', minutes: 45 },
       { id: 'first-programs', title: 'Values, variables, and control flow', href: 'lessons/04-values-and-control-flow.html', minutes: 45 },
-      { id: 'functions', title: 'Functions and abstraction' },
+      { id: 'functions', title: 'Functions and abstraction', href: 'lessons/05-functions.html', minutes: 50 },
     ],
   },
   { title: 'Programming with abstraction', summary: 'Recursion, higher-order functions, objects, and the shape of good programs.', sources: ['Berkeley CS61A', 'Stanford CS106B', 'MIT 6.102'] },

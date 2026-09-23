@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Functions and abstraction | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .side { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+  .side pre { margin: 0; }
+  .side h4 { font: 600 .9rem var(--sans); color: var(--ink-2); margin: 0 0 .4rem; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 1: How computers work, lesson 5 of 5</div>
+    <h1>Functions and abstraction</h1>
+    <p class="lede">A function gives a piece of work a name, so you can use it without thinking about how it works. That one idea, used over and over, is how people build programs far too big to hold in their heads. Here you'll see how functions work under the hood, with the call stack, and what makes one well designed.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="tr-title">
+    <h2 id="tr-title" style="margin-top:0;font-size:1.25rem">Watch the call stack</h2>
+    <div class="try">Pick a program and step through it. Each call puts a new frame on top of the stack; each return removes it.</div>
+    <div id="tracer"></div>
+  </section>
+  <p>Every running program has a stack like this. When a program crashes, the "traceback" it prints is this stack, written out at the moment things went wrong.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Define and call functions, and say what a function without <code>return</code> gives back.</li>
+      <li>Explain why each call gets its own local variables.</li>
+      <li>Draw the call stack for a program, including a recursive one.</li>
+      <li>Predict what happens when a function changes a list it was given.</li>
+      <li>Explain abstraction, and why the boundary between a function's interface and its code matters.</li>
+      <li>Pass a function to another function.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#why">Why functions</a></li>
+      <li><a href="#calling">Defining and calling</a></li>
+      <li><a href="#scope">Every call gets its own variables</a></li>
+      <li><a href="#stack">The call stack</a></li>
+      <li><a href="#recursion">Recursion</a></li>
+      <li><a href="#sharing">Passing lists to functions</a></li>
+      <li><a href="#design">Designing good functions</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="why">Why functions</h2>
+  <p>Think back over this stage. In lesson 2 you built an adder out of gates, and from then on you could just say "adder" without picturing the XOR and AND gates inside. In lesson 3, the toy CPU used the ALU without caring how it was wired. Each layer hid the one below it behind a simple description of what it does.</p>
+  <p>That's <span class="hl">abstraction</span>: separating <em>what</em> something does from <em>how</em> it does it. Functions are how you build those layers in code. You've already relied on it. You've called <code>print</code> and <code>sorted</code> many times without reading their source, because their <span class="hl">interface</span> (the name, the inputs, and what comes back) told you everything you needed.</p>
+  <p>The payoff is that a function's code, its <span class="hl">implementation</span>, can change without breaking anything that calls it, as long as the interface stays the same. When Python's list sorting switched to a new algorithm, Timsort, in Python 2.3 (2003), no one's code had to change.</p>
+
+  <div class="mcq" data-id="fn-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">A function <code>shipping_cost(weight_kg)</code> is used in 40 places. Which change can you make <em>without</em> checking any of those 40 callers?</p>
+    <div class="choices">
+      <button type="button" data-why="Every caller passes kilograms. Switching the unit silently breaks all of them.">Change it to take the weight in pounds</button>
+      <button type="button" data-why="Callers that use the number would now get a string. That changes the interface.">Make it return a formatted string like "$4.99" instead of a number</button>
+      <button type="button">Replace a slow loop inside it with a lookup table that gives the same results</button>
+      <button type="button" data-why="Callers that pass one argument would now crash.">Add a required second parameter for the destination</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>The faster lookup table.</strong> Same inputs, same outputs: only the implementation changed, so callers can't tell. The other three change the interface (the units, the return type, or the parameters), and every caller has to be checked.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="calling">Defining and calling</h2>
+  <p><code>def</code> creates a function. The names in parentheses are its <span class="hl">parameters</span>. When you call it, the values you pass in are the <span class="hl">arguments</span>, and each parameter is set to its argument. <code>return</code> ends the function and hands a value back to the caller.</p>
+<pre><code>def area(width, height):      # width and height are parameters
+    return width * height
+
+print(area(3, 4))             # 3 and 4 are arguments; prints 12</code></pre>
+  <p>Defining a function doesn't run it. Step through "Calls and returns" on the tracer: lines 1 and 4 just create the functions, and nothing inside them runs until line 7 calls <code>sum_of_squares</code>.</p>
+
+  <div class="problem" data-id="fn-p1" data-answer="none">
+    <span class="qtag">Practice 1</span>
+    <p class="q">What does this print?</p>
+<pre><code>def double(x):
+    x * 2
+
+print(double(3))</code></pre>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The function computes <code>x * 2</code>. Does it give it back?</details>
+    <div class="solution" hidden><p><strong>None</strong>. The function computes 6 and throws it away, because there's no <code>return</code>. A function that reaches its end without a <code>return</code> gives back <code>None</code>. This is one of the most common beginner bugs, and it usually shows up later as an error about <code>NoneType</code>.</p></div>
+  </div>
+
+  <div class="problem" data-id="fn-p2" data-answer="26">
+    <span class="qtag">Practice 2</span>
+    <p class="q">With <code>def f(x): return x * x + 1</code>, what does <code>f(f(2))</code> return?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Work from the inside out. The inner call runs first, and its result becomes the outer call's argument.</details>
+    <div class="solution" hidden><p><code>f(2)</code> is 2 × 2 + 1 = 5, so the outer call is <code>f(5)</code> = 25 + 1 = <strong>26</strong>. Arguments are always worked out before the call happens.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="scope">Every call gets its own variables</h2>
+  <p>Variables created inside a function are <span class="hl">local</span>: they exist only during that call, and no one outside can see them. Parameters are local too. Each call gets a fresh set, stored in a <span class="hl">frame</span>, which is exactly what the boxes on the tracer show.</p>
+  <p>That's what makes functions safe to combine. You can name a variable <code>count</code> inside your function without worrying whether some other code also has a <code>count</code>. Step through "Local scope" and watch two different variables called <code>count</code>, one in each frame.</p>
+
+  <div class="problem" data-id="fn-p3" data-answer="10 11|1011">
+    <span class="qtag">Practice 3</span>
+    <p class="q">What does the "Local scope" program print? Predict it before you step to the end.</p>
+<pre><code>count = 10
+
+def bump(count):
+    count = count + 1
+    return count
+
+result = bump(count)
+print(count, result)</code></pre>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off" placeholder="e.g. 1 2"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Inside <code>bump</code>, <code>count</code> is the parameter, a separate local variable. Which <code>count</code> does line 4 change?</details>
+    <div class="solution" hidden><p><strong>10 11</strong>. The parameter <code>count</code> starts out pointing at the same 10, then line 4 moves the <em>local</em> name to 11. The global <code>count</code> never changes. The only way information gets out of <code>bump</code> is its return value. (Python does have a <code>global</code> keyword to change a global from inside a function, but code that relies on it is hard to follow and test.)</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="stack">The call stack</h2>
+  <p>Function calls nest. <code>sum_of_squares</code> calls <code>square</code>, which might call something else, and every one of them has to return to exactly the right place. The CPU keeps track with the <span class="hl">call stack</span>: a pile of frames in memory, one per call that hasn't finished yet.</p>
+  <ul>
+    <li>A <strong>call</strong> pushes a new frame on top, holding the function's local variables and the <span class="hl">return address</span>, the spot in the caller to go back to.</li>
+    <li>A <strong>return</strong> pops the top frame off, hands the return value back, and jumps to the saved return address.</li>
+  </ul>
+  <p>This is the jump from lesson 3, plus memory. On x86-64, the <code>call</code> instruction pushes the return address and jumps; <code>ret</code>, the last line of the compiled <code>add</code> function in lesson 3, pops it and jumps back. Only the top frame is ever running. Everything below it is paused, waiting for a return.</p>
+
+  <figure class="figure">
+    <svg viewBox="0 0 600 300" role="img" aria-labelledby="st-t" style="max-width:640px">
+      <title id="st-t">The call stack at the deepest point of factorial(4). From bottom to top: the global frame, then factorial frames with n equal to 4, 3, 2, and 1. The top frame returns 1. Then each frame below returns in turn: 2, 6, and 24.</title>
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/></marker></defs>
+      <g class="mono" font-size="14">
+        <rect x="40" y="240" width="300" height="44" rx="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/>
+        <text x="56" y="267">global</text><text x="324" y="267" text-anchor="end" fill="var(--ink-2)">print(factorial(4))</text>
+        <rect x="40" y="190" width="300" height="44" rx="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/>
+        <text x="56" y="217">factorial  n=4</text><text x="324" y="217" text-anchor="end" fill="var(--ink-2)">4 * ▢</text>
+        <rect x="40" y="140" width="300" height="44" rx="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/>
+        <text x="56" y="167">factorial  n=3</text><text x="324" y="167" text-anchor="end" fill="var(--ink-2)">3 * ▢</text>
+        <rect x="40" y="90" width="300" height="44" rx="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/>
+        <text x="56" y="117">factorial  n=2</text><text x="324" y="117" text-anchor="end" fill="var(--ink-2)">2 * ▢</text>
+        <rect x="40" y="40" width="300" height="44" rx="6" fill="var(--hl)" stroke="var(--ink)" stroke-width="2.5"/>
+        <text x="56" y="67" fill="#1b2a41">factorial  n=1</text><text x="324" y="67" text-anchor="end" fill="#1b2a41">return 1</text>
+      </g>
+      <text x="40" y="26" class="gsmall">top of the stack: the only frame running</text>
+      <g fill="none" stroke="var(--ink)" stroke-width="1.8">
+        <path d="M344,62 C390,62 390,112 348,112" marker-end="url(#arr)"/>
+        <path d="M344,112 C390,112 390,162 348,162" marker-end="url(#arr)"/>
+        <path d="M344,162 C390,162 390,212 348,212" marker-end="url(#arr)"/>
+        <path d="M344,212 C390,212 390,262 348,262" marker-end="url(#arr)"/>
+      </g>
+      <g class="gsmall">
+        <text x="394" y="91">returns 1</text>
+        <text x="394" y="141">returns 2 × 1 = 2</text>
+        <text x="394" y="191">returns 3 × 2 = 6</text>
+        <text x="394" y="241">returns 4 × 6 = 24</text>
+      </g>
+    </svg>
+    <figcaption>The stack at the deepest point of <code>factorial(4)</code>. Each paused frame is waiting for the one above it to fill in its ▢. Then the returns flow back down, one frame at a time.</figcaption>
+  </figure>
+
+  <div class="mcq" data-id="fn-q2" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">When a function returns, what happens to its local variables?</p>
+    <div class="choices">
+      <button type="button" data-why="Locals don't leak into the caller. Only the return value comes back.">They're copied into the caller's frame</button>
+      <button type="button">Its frame is popped off the stack, and the locals go with it</button>
+      <button type="button" data-why="Each call starts with a fresh frame; nothing is kept between calls.">They're saved for the next time the function is called</button>
+      <button type="button" data-why="Locals live in the call's frame, not in the global frame.">They become global variables</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>The frame is popped.</strong> The return value goes back to the caller, and the local names disappear. (If a local name pointed at a list that something else also points at, the list itself survives. Only the name is gone.)</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="recursion">Recursion</h2>
+  <p>A function can call itself. That's <span class="hl">recursion</span>, and it fits problems that contain smaller copies of themselves. The factorial 4! = 4 × 3 × 2 × 1 is just 4 × 3!, so:</p>
+<pre><code>def factorial(n):
+    if n == 1:                    # base case: small enough to answer directly
+        return 1
+    return n * factorial(n - 1)   # recursive case: a smaller copy of the problem</code></pre>
+  <p>Every recursive function needs both parts. The <span class="hl">base case</span> stops the recursion. The recursive case must move toward it. Step through "Recursion" on the tracer and watch the stack grow to its deepest point, then unwind as each frame returns.</p>
+
+  <div class="problem" data-id="fn-p4" data-answer="4|four">
+    <span class="qtag">Practice 4</span>
+    <p class="q">At the deepest point of <code>factorial(4)</code>, how many <code>factorial</code> frames are on the stack at once?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Count the calls that have started but not yet returned when <code>n</code> reaches 1.</details>
+    <div class="solution" hidden><p><strong>4</strong>: n = 4, 3, 2, and 1, all waiting at once (plus the global frame under them). <code>factorial(n)</code> uses n frames, so the stack's size grows with the input.</p></div>
+  </div>
+
+  <div class="mcq" data-id="fn-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">What happens if you call <code>factorial(0)</code> with the code above?</p>
+    <div class="choices">
+      <button type="button" data-why="0! is 1 in math, but this code never checks for 0.">It returns 1</button>
+      <button type="button" data-why="Nothing in the code returns 0. Follow n: 0, −1, −2, ...">It returns 0</button>
+      <button type="button" data-why="Recursion this deep doesn't run forever in Python: the stack has a limit.">It runs forever, like an infinite loop</button>
+      <button type="button">It crashes with RecursionError</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>n goes 0, −1, −2, ... and never equals 1, so every call adds another frame. Python stops it at about 1,000 frames (<code>sys.getrecursionlimit()</code>) with a <strong>RecursionError</strong>. In C, the same bug keeps going until the stack runs out of memory (usually 1 to 8 megabytes by default) and the program crashes with a <span class="hl">stack overflow</span>, the error the Q&amp;A site is named after. A safer base case is <code>if n &lt;= 1</code>.</p></div>
+  </div>
+
+  <p>Any recursive function can be rewritten as a loop, and in Python a loop is usually faster and has no depth limit. Recursion earns its place on problems that branch, like walking a folder tree or a family tree, where a loop needs extra bookkeeping. Stage 2 and stage 3 use it a lot.</p>
+
+  <!-- 6 -->
+  <h2 id="sharing">Passing lists to functions</h2>
+  <p>Remember from lesson 4 that assignment never copies. Calling a function is the same: each parameter becomes a new name for the argument's value. With a number, that never matters. With a list, the function and the caller share one list, so if the function changes it, the caller sees the change. Step through "Shared lists" and look at the tags: <code>cart</code> and <code>items</code> are both list #1.</p>
+
+  <div class="mcq" data-id="fn-q4" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">What does this print? (It's a famous Python gotcha.)</p>
+<pre><code>def add(x, items=[]):
+    items.append(x)
+    return items
+
+add(1)
+print(add(2))</code></pre>
+    <div class="choices">
+      <button type="button">[1, 2]</button>
+      <button type="button" data-why="That's what most people expect, which is why it's a famous gotcha. When is the [] created?">[2]</button>
+      <button type="button" data-why="Default values are allowed to be lists. It runs.">An error</button>
+      <button type="button" data-why="add returns the list, so print shows it.">None</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>[1, 2]</strong>. A default value is created once, when <code>def</code> runs, not on every call. So every call that leaves out <code>items</code> shares the same list, and it keeps growing. The standard fix:</p>
+<pre><code>def add(x, items=None):
+    if items is None:
+        items = []
+    ...</code></pre></div>
+  </div>
+
+  <!-- 7 -->
+  <h2 id="design">Designing good functions</h2>
+  <p>Writing functions is easy. Choosing where to draw their boundaries is a skill you'll keep improving for your whole career. A few widely shared rules of thumb:</p>
+  <ul>
+    <li><strong>One job, with a name that says what it is.</strong> If the honest name has "and" in it, like <code>validate_and_save</code>, it's probably two functions.</li>
+    <li><strong>Prefer pure functions.</strong> A <span class="hl">pure function</span> gives the same output for the same input and changes nothing else: no printing, no global variables, no changing its arguments. Pure functions are easy to test and safe to call anywhere.</li>
+    <li><strong>Say what it promises.</strong> A docstring states the interface: what goes in, what comes out, and any conditions. Callers should never need to read the body.</li>
+    <li><strong>Hide the details.</strong> A good function has a simple interface over a complicated job. John Ousterhout, whose Stanford course appears in stage 9, calls these "deep modules".</li>
+  </ul>
+<pre><code>def average(scores):
+    """Return the mean of a non-empty list of numbers."""
+    return sum(scores) / len(scores)</code></pre>
+
+  <div class="mcq" data-id="fn-q5" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">Which of these functions is pure?</p>
+    <div class="choices">
+      <button type="button" data-why="Printing is a side effect: it changes something outside the function.">def show(x): print(x * 2)</button>
+      <button type="button" data-why="It changes its argument, which the caller can see.">def grow(items): items.append(0)</button>
+      <button type="button">def biggest(a, b): return a if a &gt; b else b</button>
+      <button type="button" data-why="Its result depends on the clock, not only its inputs.">def stamp(msg): return f"{time.time()}: {msg}"</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong><code>biggest</code></strong> depends only on its arguments and changes nothing. Real programs need side effects (printing, saving files, reading the clock), so the goal isn't to remove them. It's to keep them in a few clearly named places, with pure logic everywhere else.</p></div>
+  </div>
+
+  <p>One last idea, which stage 2 builds on: in Python, a function is a value like any other. You can store it in a variable or pass it to another function. <code>sorted</code> takes an optional <code>key</code> function and sorts by whatever it returns:</p>
+
+  <div class="problem" data-id="fn-p5" data-answer="['fig', 'pear', 'banana']|[&quot;fig&quot;, &quot;pear&quot;, &quot;banana&quot;]|fig pear banana">
+    <span class="qtag">Practice 5</span>
+    <p class="q">What does <code>sorted(["pear", "fig", "banana"], key=len)</code> return?</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off" placeholder="e.g. ['a', 'b']"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary><code>len</code> is called on each word, and the words are sorted by those numbers: 4, 3, 6.</details>
+    <div class="solution" hidden><p><strong>['fig', 'pear', 'banana']</strong>: lengths 3, 4, 6. Note that it's <code>key=len</code>, not <code>key=len()</code>. You're handing over the function itself, for <code>sorted</code> to call on each item.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>The 11 lines that broke the internet, 2016</h3>
+    <p>On March 22, 2016, a developer in a naming dispute unpublished all 273 of his packages from npm, JavaScript's package registry. One was <code>left-pad</code>, a single 11-line function that pads a string with spaces on the left. Thousands of projects depended on it, many without knowing, through packages that depended on packages that depended on it, including the build tools behind React and Babel. Builds failed around the world for a few hours, until npm took the unusual step of restoring the package. npm then changed its rules so that popular packages can't simply be removed. The lesson cuts both ways: reusing functions is the point of abstraction, but every function you depend on is code you've chosen to trust.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Abstraction separates what something does (its interface) from how (its implementation). Functions are how you build it in code.</li>
+    <li>Parameters are names in the definition; arguments are values in the call. No <code>return</code> means the function returns <code>None</code>.</li>
+    <li>Each call gets a fresh frame of local variables. The only clean way out is the return value.</li>
+    <li>The call stack holds one frame per unfinished call. Calls push; returns pop and jump back.</li>
+    <li>Recursion needs a base case and steps toward it. Too deep, and the stack overflows.</li>
+    <li>Passing a list shares it. Never use a mutable default like <code>items=[]</code>.</li>
+    <li>Prefer small, pure, well-named functions with a clear promise.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>Make Python print the call stack for you. Run this and read the traceback from the top down: it's the stack, oldest call first.</p>
+<pre><code>def a(): b()
+def b(): c()
+def c(): 1 / 0
+
+a()
+
+# Traceback (most recent call last):    (source lines trimmed)
+#   File "demo.py", line 5, in &lt;module&gt;
+#   File "demo.py", line 1, in a
+#   File "demo.py", line 2, in b
+#   File "demo.py", line 3, in c
+# ZeroDivisionError: division by zero</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 5</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="functions">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">That's the end of stage 1. You've gone from a single bit to gates, a CPU, machine code, and the programs you write every day. Next comes stage 2, <strong>Programming with abstraction</strong>: recursion, higher-order functions, and objects.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.composingprograms.com/" target="_blank" rel="noopener">Composing Programs</a><span>The free textbook for Berkeley CS61A. Chapter 1 covers functions, environments, and abstraction in depth.</span></li>
+      <li><a href="https://cs61a.org/" target="_blank" rel="noopener">Berkeley CS61A</a><span>The course stage 2 is built on. Its environment diagrams show frames exactly like the tracer.</span></li>
+      <li><a href="https://ocw.mit.edu/courses/6-100l-introduction-to-cs-and-programming-using-python-fall-2022/" target="_blank" rel="noopener">MIT 6.100L: Introduction to CS and Programming Using Python</a><span>The lectures on functions, decomposition, and recursion.</span></li>
+      <li><a href="https://docs.python.org/3/tutorial/controlflow.html#defining-functions" target="_blank" rel="noopener">The Python Tutorial: Defining functions</a><span>Default values (including the mutable default gotcha), keyword arguments, and docstrings.</span></li>
+      <li><a href="https://pythontutor.com/" target="_blank" rel="noopener">Python Tutor</a><span>Paste in your own recursive functions and watch the frames stack up.</span></li>
+      <li><a href="https://web.stanford.edu/~ouster/cgi-bin/book.php" target="_blank" rel="noopener">A Philosophy of Software Design, by John Ousterhout</a><span>A short book on deep modules, interfaces, and managing complexity. Stage 9 draws on it.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Call_stack" target="_blank" rel="noopener">Call stack (Wikipedia)</a><span>Frames, return addresses, and how different CPUs lay out the stack.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Timsort" target="_blank" rel="noopener">Timsort (Wikipedia)</a><span>The sorting algorithm Tim Peters wrote for Python in 2002, swapped in behind the same <code>list.sort</code> interface.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Npm_left-pad_incident" target="_blank" rel="noopener">npm left-pad incident (Wikipedia)</a><span>A timeline of what happened and what npm changed afterward.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script src="../assets/tracer.js"></script>
+<script>
+  // Recorded by running each program under sys.settrace (Python 3.14).
+  const TRACES = {"Calls and returns": {"code": "def square(n):\n    return n * n\n\ndef sum_of_squares(a, b):\n    return square(a) + square(b)\n\ntotal = sum_of_squares(3, 4)\nprint(total)", "steps": [{"line": 1, "frames": [{"fn": "global", "vars": []}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["square", "function square", null]]}], "out": ""}, {"line": 7, "frames": [{"fn": "global", "vars": [["square", "function square", null], ["sum_of_squares", "function sum_of_squares", null]]}], "out": ""}, {"line": 5, "frames": [{"fn": "global", "vars": [["square", "function square", null], ["sum_of_squares", "function sum_of_squares", null]]}, {"fn": "sum_of_squares", "vars": [["a", "3", null], ["b", "4", null]]}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["square", "function square", null], ["sum_of_squares", "function sum_of_squares", null]]}, {"fn": "sum_of_squares", "vars": [["a", "3", null], ["b", "4", null]]}, {"fn": "square", "vars": [["n", "3", null]]}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["square", "function square", null], ["sum_of_squares", "function sum_of_squares", null]]}, {"fn": "sum_of_squares", "vars": [["a", "3", null], ["b", "4", null]]}, {"fn": "square", "vars": [["n", "3", null]]}], "out": "", "ret": "9"}, {"line": 2, "frames": [{"fn": "global", "vars": [["square", "function square", null], ["sum_of_squares", "function sum_of_squares", null]]}, {"fn": "sum_of_squares", "vars": [["a", "3", null], ["b", "4", null]]}, {"fn": "square", "vars": [["n", "4", null]]}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["square", "function square", null], ["sum_of_squares", "function sum_of_squares", null]]}, {"fn": "sum_of_squares", "vars": [["a", "3", null], ["b", "4", null]]}, {"fn": "square", "vars": [["n", "4", null]]}], "out": "", "ret": "16"}, {"line": 5, "frames": [{"fn": "global", "vars": [["square", "function square", null], ["sum_of_squares", "function sum_of_squares", null]]}, {"fn": "sum_of_squares", "vars": [["a", "3", null], ["b", "4", null]]}], "out": "", "ret": "25"}, {"line": 8, "frames": [{"fn": "global", "vars": [["square", "function square", null], ["sum_of_squares", "function sum_of_squares", null], ["total", "25", null]]}], "out": ""}, {"line": 0, "frames": [{"fn": "global", "vars": [["square", "function square", null], ["sum_of_squares", "function sum_of_squares", null], ["total", "25", null]]}], "out": "25\n"}]}, "Local scope": {"code": "count = 10\n\ndef bump(count):\n    count = count + 1\n    return count\n\nresult = bump(count)\nprint(count, result)", "steps": [{"line": 1, "frames": [{"fn": "global", "vars": []}], "out": ""}, {"line": 3, "frames": [{"fn": "global", "vars": [["count", "10", null]]}], "out": ""}, {"line": 7, "frames": [{"fn": "global", "vars": [["count", "10", null], ["bump", "function bump", null]]}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["count", "10", null], ["bump", "function bump", null]]}, {"fn": "bump", "vars": [["count", "10", null]]}], "out": ""}, {"line": 5, "frames": [{"fn": "global", "vars": [["count", "10", null], ["bump", "function bump", null]]}, {"fn": "bump", "vars": [["count", "11", null]]}], "out": ""}, {"line": 5, "frames": [{"fn": "global", "vars": [["count", "10", null], ["bump", "function bump", null]]}, {"fn": "bump", "vars": [["count", "11", null]]}], "out": "", "ret": "11"}, {"line": 8, "frames": [{"fn": "global", "vars": [["count", "10", null], ["bump", "function bump", null], ["result", "11", null]]}], "out": ""}, {"line": 0, "frames": [{"fn": "global", "vars": [["count", "10", null], ["bump", "function bump", null], ["result", "11", null]]}], "out": "10 11\n"}]}, "Recursion": {"code": "def factorial(n):\n    if n == 1:\n        return 1\n    return n * factorial(n - 1)\n\nprint(factorial(4))", "steps": [{"line": 1, "frames": [{"fn": "global", "vars": []}], "out": ""}, {"line": 6, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}, {"fn": "factorial", "vars": [["n", "4", null]]}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}, {"fn": "factorial", "vars": [["n", "4", null]]}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}, {"fn": "factorial", "vars": [["n", "4", null]]}, {"fn": "factorial", "vars": [["n", "3", null]]}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}, {"fn": "factorial", "vars": [["n", "4", null]]}, {"fn": "factorial", "vars": [["n", "3", null]]}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}, {"fn": "factorial", "vars": [["n", "4", null]]}, {"fn": "factorial", "vars": [["n", "3", null]]}, {"fn": "factorial", "vars": [["n", "2", null]]}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}, {"fn": "factorial", "vars": [["n", "4", null]]}, {"fn": "factorial", "vars": [["n", "3", null]]}, {"fn": "factorial", "vars": [["n", "2", null]]}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}, {"fn": "factorial", "vars": [["n", "4", null]]}, {"fn": "factorial", "vars": [["n", "3", null]]}, {"fn": "factorial", "vars": [["n", "2", null]]}, {"fn": "factorial", "vars": [["n", "1", null]]}], "out": ""}, {"line": 3, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}, {"fn": "factorial", "vars": [["n", "4", null]]}, {"fn": "factorial", "vars": [["n", "3", null]]}, {"fn": "factorial", "vars": [["n", "2", null]]}, {"fn": "factorial", "vars": [["n", "1", null]]}], "out": ""}, {"line": 3, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}, {"fn": "factorial", "vars": [["n", "4", null]]}, {"fn": "factorial", "vars": [["n", "3", null]]}, {"fn": "factorial", "vars": [["n", "2", null]]}, {"fn": "factorial", "vars": [["n", "1", null]]}], "out": "", "ret": "1"}, {"line": 4, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}, {"fn": "factorial", "vars": [["n", "4", null]]}, {"fn": "factorial", "vars": [["n", "3", null]]}, {"fn": "factorial", "vars": [["n", "2", null]]}], "out": "", "ret": "2"}, {"line": 4, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}, {"fn": "factorial", "vars": [["n", "4", null]]}, {"fn": "factorial", "vars": [["n", "3", null]]}], "out": "", "ret": "6"}, {"line": 4, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}, {"fn": "factorial", "vars": [["n", "4", null]]}], "out": "", "ret": "24"}, {"line": 0, "frames": [{"fn": "global", "vars": [["factorial", "function factorial", null]]}], "out": "24\n"}]}, "Shared lists": {"code": "def add_item(items, x):\n    items.append(x)\n\ncart = [\"milk\"]\nadd_item(cart, \"eggs\")\nprint(cart)", "steps": [{"line": 1, "frames": [{"fn": "global", "vars": []}], "out": ""}, {"line": 4, "frames": [{"fn": "global", "vars": [["add_item", "function add_item", null]]}], "out": ""}, {"line": 5, "frames": [{"fn": "global", "vars": [["add_item", "function add_item", null], ["cart", "['milk']", "list #1"]]}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["add_item", "function add_item", null], ["cart", "['milk']", "list #1"]]}, {"fn": "add_item", "vars": [["items", "['milk']", "list #1"], ["x", "'eggs'", null]]}], "out": ""}, {"line": 2, "frames": [{"fn": "global", "vars": [["add_item", "function add_item", null], ["cart", "['milk', 'eggs']", "list #1"]]}, {"fn": "add_item", "vars": [["items", "['milk', 'eggs']", "list #1"], ["x", "'eggs'", null]]}], "out": "", "ret": "None"}, {"line": 6, "frames": [{"fn": "global", "vars": [["add_item", "function add_item", null], ["cart", "['milk', 'eggs']", "list #1"]]}], "out": ""}, {"line": 0, "frames": [{"fn": "global", "vars": [["add_item", "function add_item", null], ["cart", "['milk', 'eggs']", "list #1"]]}], "out": "['milk', 'eggs']\n"}]}};
+  Tracer.mount(document.getElementById('tracer'), TRACES);
+</script>
+</body>
+</html>

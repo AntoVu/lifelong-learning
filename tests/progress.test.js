@@ -48,3 +48,11 @@ test('achievements unlock once and report only new ones', () => {
 test('dayKey uses local calendar date', () => {
   assert.equal(P.dayKey(new Date(2026, 8, 21, 23, 59)), '2026-09-21');
 });
+
+test('stage-1 achievement needs every stage 1 lesson finished', () => {
+  const s = P.fresh();
+  ['bits', 'gates', 'fetch', 'first-programs'].forEach(id => P.completeLesson(s, id, false, '2026-09-23'));
+  assert.ok(!P.checkAchievements(s, '2026-09-23').includes('stage-1'));
+  P.completeLesson(s, 'functions', false, '2026-09-23');
+  assert.deepEqual(P.checkAchievements(s, '2026-09-23'), ['stage-1']);
+});

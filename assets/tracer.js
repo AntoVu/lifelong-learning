@@ -63,8 +63,8 @@
             return `<dt>${esc(v[0])}</dt><dd class="${changed ? 'changed' : ''}"><code>${esc(v[1])}</code>${v[2] ? `<span class="tr-tag">${esc(v[2])}</span>` : ''}</dd>`;
           }).join('')}</dl>` : '<p class="tr-empty">No variables yet</p>'}
           ${s.ret !== undefined && d === s.frames.length - 1 ? `<p class="tr-ret">returns <code>${esc(s.ret)}</code></p>` : ''}
-        </div>`).join('');
-      $('.tr-stackcap').textContent = s.frames.length > 1 ? 'Call stack (newest call at the bottom)' : 'Variables';
+        </div>`).reverse().join(''); // newest call on top
+      $('.tr-stackcap').textContent = s.frames.length > 1 ? 'Call stack (newest call on top)' : 'Variables';
       $('.tr-out').textContent = s.out || ' ';
       const top = s.frames[s.frames.length - 1];
       $('.tr-msg').textContent = s.line === 0 ? 'The program has finished.'

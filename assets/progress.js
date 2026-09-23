@@ -6,6 +6,8 @@
   const LESSON_XP = 50;
   const DAILY_GOAL = 30;
 
+  const STAGE_1 = ['bits', 'gates', 'fetch', 'first-programs', 'functions'];
+
   const ACHIEVEMENTS = [
     { id: 'first-flip', name: 'Flipped a bit', desc: 'Toggle your first switch.', test: s => s.flags.flipped },
     { id: 'first-solve', name: 'First answer', desc: 'Solve a practice problem.', test: s => Object.keys(s.solved).length > 0 },
@@ -13,6 +15,7 @@
     { id: 'lesson-1', name: 'First lesson done', desc: 'Finish a lesson.', test: s => Object.keys(s.lessons).length > 0 },
     { id: 'perfect', name: 'Clean sheet', desc: 'Finish a lesson with every problem right on the first try.', test: s => Object.values(s.lessons).some(l => l.perfect) },
     { id: 'curious', name: 'Went to the source', desc: 'Open a reference link.', test: s => s.flags.openedReference },
+    { id: 'stage-1', name: 'How computers work', desc: 'Finish every lesson in stage 1.', test: s => STAGE_1.every(id => s.lessons[id]) },
     { id: 'streak-3', name: 'Three in a row', desc: 'Keep a 3-day streak.', test: (s, d) => streak(s, d) >= 3 },
     { id: 'streak-7', name: 'A full week', desc: 'Keep a 7-day streak.', test: (s, d) => streak(s, d) >= 7 },
     { id: 'xp-500', name: 'Five hundred', desc: 'Earn 500 XP in total.', test: s => s.xp >= 500 },
