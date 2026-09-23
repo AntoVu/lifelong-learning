@@ -33,7 +33,9 @@
   .regs dd.changed { background: var(--hl); color: var(--hl-ink); border-radius: 3px; padding: 0 .3rem; justify-self: start; }
   .explain { font: .95rem/1.5 var(--sans); min-height: 4.5em; margin: 0; padding: .6rem .8rem; border-left: 4px solid var(--hl); background: var(--paper); }
   .outtape { font: 1rem var(--mono); margin: 0; }
-  .controls { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .4rem; }
+  .controls { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .4rem; align-items: center; }
+  .phase-toggle { font: .9rem var(--sans); display: flex; gap: .4rem; align-items: center; margin-left: .3rem; }
+  .phases[hidden] { display: none; }
 
   .isa td:first-child, .isa td:nth-child(2) { font-family: var(--mono); white-space: nowrap; }
   .side { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
@@ -53,7 +55,7 @@
 
   <section class="panel" aria-labelledby="toy-title">
     <h2 id="toy-title" style="margin-top:0;font-size:1.25rem">A computer you can step through</h2>
-    <div class="try">Pick a program and press Step. Each press runs one phase: fetch, decode, or execute.</div>
+    <div class="try">Pick a program and press Step. Each press runs one instruction and says what it did.</div>
     <div class="seg" id="programs" role="group" aria-label="Program"></div>
     <div class="machine">
       <div class="memcol">
@@ -61,7 +63,7 @@
         <p class="memcap">16 bytes of memory. Each cell shows its address, its byte in hex (you can edit it), and that byte read as an instruction.</p>
       </div>
       <div class="cpu">
-        <div class="phases" id="phases"><span>Fetch</span><span>Decode</span><span>Execute</span></div>
+        <div class="phases" id="phases" hidden><span>Fetch</span><span>Decode</span><span>Execute</span></div>
         <dl class="regs" id="regs"></dl>
         <p class="explain" id="explain" aria-live="polite"></p>
         <p class="outtape" id="out">Output: (nothing yet)</p>
@@ -69,9 +71,9 @@
     </div>
     <div class="controls">
       <button class="btn" type="button" id="step">Step</button>
-      <button class="btn quiet" type="button" id="step-ins">Run one instruction</button>
       <button class="btn quiet" type="button" id="run">Run</button>
       <button class="btn quiet" type="button" id="reset">Reset</button>
+      <label class="phase-toggle"><input type="checkbox" id="phase-mode"> Show the three phases</label>
     </div>
   </section>
   <p>That's a complete computer. It's far smaller than a real one, but it works on the same principle. By the end of this lesson you'll be able to read its programs, change them, and see how the code you write turns into something like them.</p>
@@ -208,7 +210,7 @@
     <figcaption>The instruction cycle. Notice that PC moves forward during fetch, before the instruction runs. Execute can then overwrite it, which is how jumps work.</figcaption>
   </figure>
 
-  <p>Go back to the toy computer, pick Add, and press Step slowly. Watch the outlined cell (where PC points) and the explanation. After four instructions, <code>A</code> holds 28 + 14 = 42 and the output shows it.</p>
+  <p>Go back to the toy computer, pick Add, tick <strong>Show the three phases</strong>, and press Step slowly. Now each press runs one phase, and a new register appears: IR. Watch the outlined cell (where PC points) and the explanation. After four instructions, <code>A</code> holds 28 + 14 = 42 and the output shows it.</p>
 
   <div class="mcq" data-id="fetch-q2" data-correct="2">
     <span class="qtag">Check</span>
@@ -470,7 +472,7 @@ run([0x53, 0x80, 0x3F, 0x75, 0x61, 0x00] + [0] * 9 + [1])  # Countdown: 3 2 1</c
     function reset() {
       stop();
       m = { mem: PROGRAMS[prog].mem.slice(), pc: 0, ir: null, a: 0, z: false, phase: 0, out: [], halted: false, count: 0, touched: -1, changed: new Set(),
-            msg: `${PROGRAMS[prog].note} Press Step to fetch the first instruction.` };
+            msg: `${PROGRAMS[prog].note} Press Step to run the first instruction.` };
       render();
     }
 
@@ -480,7 +482,7 @@ run([0x53, 0x80, 0x3F, 0x75, 0x61, 0x00] + [0] * 9 + [1])  # Countdown: 3 2 1</c
       m.changed = new Set(); m.touched = -1;
       if (m.phase === 0) {
         if (m.count >= LIMIT) { m.msg = `Paused after ${LIMIT} instructions. Is the program stuck in a loop?`; stop(); return render(); }
-        m.ir = m.mem[m.pc]; m.touched = m.pc;
+        m.ir = m.mem[m.pc]; m.touched = m.pc; m.at = m.pc;
         m.msg = `Fetch: copy the byte at address ${m.pc} (${hex(m.ir)}) into IR, then add 1 to PC.`;
         m.pc = (m.pc + 1) & 15; m.changed = new Set(['ir', 'pc']);
       } else if (m.phase === 1) {
@@ -488,32 +490,33 @@ run([0x53, 0x80, 0x3F, 0x75, 0x61, 0x00] + [0] * 9 + [1])  # Countdown: 3 2 1</c
         m.msg = op > 8 ? `Decode: opcode ${op} isn't an instruction this CPU knows.`
           : `Decode: ${hex(m.ir)} is opcode ${op} (${NAMES[op]})` + (NO_ARG.has(op) ? ', which takes no operand.' : ` with operand ${arg}: ${asm(m.ir)}.`);
       } else {
-        execute(); m.count++;
+        m.msg = (phaseMode() ? 'Execute: ' : `Address ${m.at}, ${asm(m.ir)}: `) + execute(); m.count++;
       }
       m.phase = (m.phase + 1) % 3;
       render();
     }
 
+    // Carry out the instruction in IR; returns a plain-English description of what happened.
     function execute() {
       const op = m.ir >> 4, arg = m.ir & 15, v = m.mem[arg];
       switch (op) {
-        case 0: m.halted = true; m.msg = 'Execute: HLT. The machine stops.'; break;
-        case 1: m.a = v; m.touched = arg; m.changed.add('a'); m.msg = `Execute: copy the byte at address ${arg} (${v}) into A.`; break;
-        case 2: m.a = (m.a + v) & 255; m.z = m.a === 0; m.touched = arg; m.changed.add('a').add('z'); m.msg = `Execute: the ALU adds ${v} from address ${arg}. A is now ${m.a}.`; break;
-        case 3: m.a = (m.a - v) & 255; m.z = m.a === 0; m.touched = arg; m.changed.add('a').add('z'); m.msg = `Execute: the ALU subtracts ${v} from address ${arg}. A is now ${m.a}${m.z ? ', so Z is set' : ''}.`; break;
-        case 4: m.mem[arg] = m.a; m.touched = arg; m.msg = `Execute: write A (${m.a}) into address ${arg}.`; break;
-        case 5: m.a = arg; m.changed.add('a'); m.msg = `Execute: put the operand itself, ${arg}, into A.`; break;
-        case 6: m.pc = arg; m.changed.add('pc'); m.msg = `Execute: jump. PC is set to ${arg}, so that's where the next fetch happens.`; break;
+        case 0: m.halted = true; return 'stop. The program is finished.';
+        case 1: m.a = v; m.touched = arg; m.changed.add('a'); return `copy the number at address ${arg} (${v}) into A.`;
+        case 2: m.a = (m.a + v) & 255; m.z = m.a === 0; m.touched = arg; m.changed.add('a').add('z'); return `add the number at address ${arg} (${v}) to A. A is now ${m.a}.`;
+        case 3: m.a = (m.a - v) & 255; m.z = m.a === 0; m.touched = arg; m.changed.add('a').add('z'); return `subtract the number at address ${arg} (${v}) from A. A is now ${m.a}${m.z ? ". That's zero, so Z is set" : ''}.`;
+        case 4: m.mem[arg] = m.a; m.touched = arg; return `save A (${m.a}) into address ${arg}.`;
+        case 5: m.a = arg; m.changed.add('a'); return `put the number ${arg} into A.`;
+        case 6: m.pc = arg; m.changed.add('pc'); return `jump. The next instruction comes from address ${arg}.`;
         case 7:
-          if (m.z) { m.pc = arg; m.changed.add('pc'); m.msg = `Execute: Z is set, so jump. PC is set to ${arg}.`; }
-          else m.msg = `Execute: Z isn't set, so don't jump. PC stays at ${m.pc}.`;
-          break;
-        case 8: m.out.push(m.a); m.msg = `Execute: output A, which is ${m.a}.`; break;
-        default: m.halted = true; m.msg = `Execute: unknown opcode ${op}. A real CPU would raise an "illegal instruction" fault; this one stops.`;
+          if (m.z) { m.pc = arg; m.changed.add('pc'); return `Z is set, so jump to address ${arg}.`; }
+          return `Z isn't set, so don't jump. Carry on to address ${m.pc}.`;
+        case 8: m.out.push(m.a); return `show A (${m.a}) on the output.`;
+        default: m.halted = true; return `opcode ${op} isn't an instruction this CPU knows. A real CPU would raise an "illegal instruction" fault; this one stops.`;
       }
     }
 
     function instruction() { if (m.halted) return; do step(); while (m.phase !== 0 && !m.halted); }
+    const phaseMode = () => $('phase-mode').checked;
     function stop() { clearInterval(timer); timer = null; $('run').textContent = 'Run'; }
 
     function render() {
@@ -524,20 +527,22 @@ run([0x53, 0x80, 0x3F, 0x75, 0x61, 0x00] + [0] * 9 + [1])  # Countdown: 3 2 1</c
         c.classList.toggle('pc', i === m.pc && !m.halted);
         c.classList.toggle('touched', i === m.touched);
       });
+      $('phases').hidden = !phaseMode();
       [...$('phases').children].forEach((s, i) => s.classList.toggle('now', !m.halted && m.ir !== null && i === (m.phase + 2) % 3));
       const row = (k, label, val, note) => `<dt>${label}</dt><dd class="${m.changed.has(k) ? 'changed' : ''}">${val} <small>${note}</small></dd>`;
       $('regs').innerHTML =
         row('pc', 'PC', m.pc, 'address of the next instruction') +
-        row('ir', 'IR', m.ir === null ? '--' : hex(m.ir), m.ir === null ? 'instruction register' : asm(m.ir)) +
-        row('a', 'A', m.a, `${m.a.toString(2).padStart(8, '0')}`) +
+        (phaseMode() ? row('ir', 'IR', m.ir === null ? '--' : hex(m.ir), m.ir === null ? 'instruction register' : asm(m.ir)) : '') +
+        row('a', 'A', m.a, 'the number being worked on') +
         row('z', 'Z', m.z ? 1 : 0, 'set when the last ADD or SUB gave 0');
       $('explain').textContent = m.msg;
       $('out').textContent = 'Output: ' + (m.out.length ? (m.out.length > 12 ? '…, ' : '') + m.out.slice(-12).join(', ') : '(nothing yet)');
-      $('step').disabled = $('step-ins').disabled = $('run').disabled = m.halted;
+      $('step').disabled = $('run').disabled = m.halted;
     }
 
-    $('step').onclick = () => { stop(); step(); };
-    $('step-ins').onclick = () => { stop(); instruction(); };
+    $('step').onclick = () => { stop(); phaseMode() ? step() : instruction(); };
+    // Switching modes mid-instruction would leave a half-run instruction, so finish it first.
+    $('phase-mode').onchange = () => { if (m.phase !== 0) instruction(); else render(); };
     $('run').onclick = () => {
       if (timer) return stop();
       $('run').textContent = 'Pause';

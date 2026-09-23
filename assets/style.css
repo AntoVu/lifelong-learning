@@ -197,10 +197,23 @@ code, pre, kbd, .tr-code { font-variant-ligatures: none; }
 .tr-frame dd { margin: 0; justify-self: start; border-radius: 3px; padding: 0 .25rem; overflow-wrap: anywhere; }
 .tr-frame dd code { background: none; padding: 0; }
 .tr-frame dd.changed { background: var(--hl); color: var(--hl-ink); }
-.tr-tag { font: .72rem var(--sans); border: 1px solid currentColor; border-radius: 99px; padding: 0 .4rem; margin-left: .4rem; white-space: nowrap; }
 .tr-empty, .tr-ret { font: .85rem var(--sans); color: var(--ink-2); margin: 0; }
 .tr-ret { margin-top: .3rem; font-weight: 600; color: var(--ink); }
-.tr-out { margin: 0; min-height: 2.6em; padding: .5rem .8rem; }
+.tr-state { position: relative; padding-right: 2.2rem; }
+.tr-arrows { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.tr-arrows path { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+.tr-arrows path.tr-head { fill: var(--ink); stroke: none; }
+.tr-ptr { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; background: var(--ink); vertical-align: middle; margin: 0 .2rem; }
+.tr-heapwrap { margin-top: .4rem; }
+.tr-heapwrap[hidden] { display: none; }
+.tr-heap { display: grid; gap: .6rem; justify-items: start; }
+.tr-obj { display: inline-flex; flex-wrap: wrap; align-items: stretch; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--panel); overflow: hidden; }
+.tr-type { font: 600 .72rem var(--sans); color: var(--ink-2); padding: .2rem .45rem; align-self: center; }
+.tr-item { display: grid; text-align: center; border-left: 1px solid var(--rule); padding: .1rem .5rem .25rem; }
+.tr-item small { font: .65rem var(--mono); color: var(--pencil); }
+.tr-item code { background: none; padding: 0; }
+.tr-item.changed { background: var(--hl); color: var(--hl-ink); }
+.tr-out { margin: 0 0 .6rem; min-height: 2.6em; padding: .5rem .8rem; }
 .tr-msg { font: .95rem var(--sans); margin: 0 0 .6rem; min-height: 1.4em; }
 .tr-controls { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
 .tr-controls input[type=range] { flex: 1 1 8rem; accent-color: var(--ink); }
