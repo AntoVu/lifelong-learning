@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Higher-order functions | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .pipe { display: grid; gap: .5rem; margin: 1rem 0; }
+  .stage { display: grid; grid-template-columns: 9.5rem 1fr auto; gap: .8rem; align-items: center; }
+  .stage .label { font: 600 .9rem var(--mono); }
+  .chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .chip { font: .95rem var(--mono); min-width: 2.2rem; text-align: center; padding: .2rem .4rem; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); }
+  .chip.out { opacity: .35; text-decoration: line-through; border-style: dashed; }
+  .chip.result { background: var(--hl); color: var(--hl-ink); font-weight: 700; }
+  .stage .x { border: 0; background: none; color: var(--ink-2); font: 1.2rem var(--sans); cursor: pointer; padding: 0 .3rem; }
+  .adders { display: grid; gap: .5rem; margin-top: .8rem; }
+  .adders > div { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+  .adders span { font: 600 .85rem var(--sans); color: var(--ink-2); min-width: 5.5rem; }
+  .codeout { margin: 1rem 0 0; }
+  @media (max-width: 600px) { .stage { grid-template-columns: 1fr auto; gap: .3rem .8rem; } .stage .chips { grid-column: 1 / -1; grid-row: 2; } .stage .x { grid-row: 1; grid-column: 2; } }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 2: Programming with abstraction, lesson 1 of 5</div>
+    <h1>Higher-order functions</h1>
+    <p class="lede">Stage 1 ended with a small idea: a function is a value you can pass around. This lesson takes that idea seriously. Functions that take or return other functions let you name a whole <em>pattern</em> of computation, not just a single calculation.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="pipe-title">
+    <h2 id="pipe-title" style="margin-top:0;font-size:1.25rem">A data pipeline</h2>
+    <div class="try">Add steps to transform the numbers 1 to 10. Watch each step's output and the Python that does the same thing.</div>
+    <div class="adders" id="adders"></div>
+    <div class="pipe" id="pipe" aria-live="polite"></div>
+    <pre class="codeout"><code id="pipe-code"></code></pre>
+  </section>
+  <p>Every step in that pipeline is a general tool, <code>map</code>, <code>filter</code>, or a reducer like <code>sum</code>, that you customize by handing it a small function. That's the whole idea of this lesson.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Spot repeated code that differs only in a computation, and pull the pattern into a function.</li>
+      <li>Write <code>lambda</code> expressions and know when a named function is clearer.</li>
+      <li>Use <code>map</code>, <code>filter</code>, and <code>reduce</code>, and translate them to comprehensions.</li>
+      <li>Write functions that return functions, and explain what a closure remembers.</li>
+      <li>Read and write a simple decorator.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#patterns">Naming a pattern</a></li>
+      <li><a href="#lambda">Lambda expressions</a></li>
+      <li><a href="#mapfilter">Map, filter, and reduce</a></li>
+      <li><a href="#closures">Functions that return functions</a></li>
+      <li><a href="#decorators">Decorators</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="patterns">Naming a pattern</h2>
+  <p>Here are two functions that look different but share most of their code:</p>
+  <div class="side">
+<pre><code>def sum_naturals(n):
+    total, k = 0, 1
+    while k &lt;= n:
+        total, k = total + k, k + 1
+    return total</code></pre>
+<pre><code>def sum_cubes(n):
+    total, k = 0, 1
+    while k &lt;= n:
+        total, k = total + k**3, k + 1
+    return total</code></pre>
+  </div>
+  <p>The only difference is <em>what gets added</em> each time: <code>k</code> in one, <code>k**3</code> in the other. A <span class="hl">higher-order function</span> is a function that takes another function as an argument (or returns one). Here it lets you write the loop once and pass in the part that changes:</p>
+<pre><code>def summation(n, term):
+    total, k = 0, 1
+    while k &lt;= n:
+        total, k = total + term(k), k + 1
+    return total
+
+def cube(x):
+    return x * x * x
+
+summation(3, cube)       # 1 + 8 + 27 = 36</code></pre>
+  <p>This is the same move as writing a function in the first place, one level up. A function names a computation; a higher-order function names a <em>shape</em> of computation, with a hole where the details go. This example comes from Berkeley's CS61A, which builds a whole course on it.</p>
+
+  <div class="problem" data-id="hof-p1" data-answer="14">
+    <span class="qtag">Practice 1</span>
+    <p class="q">Using the <code>summation</code> above, what does <code>summation(3, lambda k: k * k)</code> return?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The term function squares each k, for k = 1, 2, 3.</details>
+    <div class="solution" hidden><p>1 + 4 + 9 = <strong>14</strong>. You've built a sum-of-squares function without writing a new loop.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="lambda">Lambda expressions</h2>
+  <p>Defining a named function just to pass it once is clumsy. A <span class="hl">lambda expression</span> creates a small function right where you need it:</p>
+<pre><code>square = lambda x: x * x      # same as: def square(x): return x * x
+summation(3, lambda k: k * k)</code></pre>
+  <p>A lambda's body must be a single expression, and its value is what the function returns. There's no <code>return</code> keyword and no room for statements. That's deliberate. If the logic needs more than one line, it deserves a name and a <code>def</code>. The name "lambda" comes from Alonzo Church's lambda calculus, a 1930s model of computation built from nothing but functions.</p>
+
+  <div class="problem" data-id="hof-p2" data-answer="12">
+    <span class="qtag">Practice 2</span>
+    <p class="q">What does <code>(lambda x, y: x * y)(3, 4)</code> evaluate to?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The parentheses around the lambda create a function; the <code>(3, 4)</code> after it calls it immediately.</details>
+    <div class="solution" hidden><p><strong>12</strong>. A lambda is an expression whose value is a function, so you can call it on the spot. You'll rarely write this in real code, but it shows that a lambda is just a function value.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="mapfilter">Map, filter, and reduce</h2>
+  <p>Three patterns show up so often that every language has them built in:</p>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Pattern</th><th>In Python</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Map</strong></td><td><code>map(f, xs)</code></td><td>Apply <code>f</code> to every item: <code>[1, 2, 3]</code> → <code>[f(1), f(2), f(3)]</code></td></tr>
+      <tr><td><strong>Filter</strong></td><td><code>filter(p, xs)</code></td><td>Keep the items where <code>p(x)</code> is true</td></tr>
+      <tr><td><strong>Reduce</strong></td><td><code>functools.reduce(f, xs)</code></td><td>Combine all the items into one value, two at a time: <code>f(f(f(1, 2), 3), 4)</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The common reductions have their own names: <code>sum</code>, <code>max</code>, <code>min</code>, <code>any</code>, <code>all</code>. In Python 3, <code>map</code> and <code>filter</code> return lazy iterators, which produce items only as you ask for them, so wrap them in <code>list(...)</code> to see everything at once.</p>
+  <p>Python also has a shorter syntax for map-and-filter, the <span class="hl">list comprehension</span>. Most Python programmers prefer it, because it reads left to right:</p>
+<pre><code>list(map(lambda x: x * x, filter(lambda x: x % 2 == 0, nums)))
+[x * x for x in nums if x % 2 == 0]          # same result</code></pre>
+  <p>Try both in the pipeline at the top: it shows the comprehension whenever your steps fit one.</p>
+
+  <div class="problem" data-id="hof-p3" data-answer="[0369]|0369">
+    <span class="qtag">Practice 3</span>
+    <p class="q">What does <code>list(filter(lambda n: n % 3 == 0, range(10)))</code> return?</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off" placeholder="e.g. [1, 2]"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary><code>range(10)</code> is 0 to 9. Keep the numbers divisible by 3, and don't forget 0.</details>
+    <div class="solution" hidden><p><strong>[0, 3, 6, 9]</strong>. 0 % 3 is 0, so 0 counts. As a comprehension: <code>[n for n in range(10) if n % 3 == 0]</code>.</p></div>
+  </div>
+
+  <div class="mcq" data-id="hof-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">Which comprehension gives the same list as <code>list(map(f, filter(p, xs)))</code>?</p>
+    <div class="choices">
+      <button type="button" data-why="This filters on f(x), the transformed value, instead of on x.">[f(x) for x in xs if p(f(x))]</button>
+      <button type="button" data-why="This filters correctly, but it never calls f, so nothing gets transformed.">[x for x in xs if p(x)]</button>
+      <button type="button">[f(x) for x in xs if p(x)]</button>
+      <button type="button" data-why="This applies f first and filters the results, which is map then filter: the opposite order.">[y for y in map(f, xs) if p(y)]</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong><code>[f(x) for x in xs if p(x)]</code></strong>. The <code>if</code> clause filters on the original item, then the expression at the front transforms the survivors. Read the nested calls from the inside out: filter first, then map.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="closures">Functions that return functions</h2>
+  <p>A higher-order function can also <em>build</em> a function and hand it back:</p>
+<pre><code>def make_adder(n):
+    def adder(k):
+        return k + n
+    return adder
+
+add_three = make_adder(3)
+add_three(4)       # 7</code></pre>
+  <p>Something odd happens here. By the time you call <code>add_three(4)</code>, the call to <code>make_adder</code> has returned and its frame is gone from the stack (lesson 5). Yet <code>adder</code> still knows that <code>n</code> is 3. That's because a function defined inside another function keeps a reference to the variables of the frame it was created in. The function plus those remembered variables is called a <span class="hl">closure</span>.</p>
+
+  <figure class="figure">
+    <svg viewBox="0 0 560 170" role="img" aria-labelledby="cl-t" style="max-width:600px">
+      <title id="cl-t">The global frame has add_three pointing to a function object, adder. The function object has an arrow to the frame it was created in, make_adder's frame, where n is 3. That frame has returned but is kept alive because the function refers to it.</title>
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/></marker></defs>
+      <rect x="20" y="30" width="170" height="70" rx="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/>
+      <text x="32" y="52" class="glabel">Global frame</text>
+      <text x="32" y="80" class="mono" font-size="14">add_three</text>
+      <circle cx="160" cy="76" r="4.5" fill="var(--ink)"/>
+      <rect x="240" y="50" width="130" height="50" rx="25" fill="var(--hl)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="305" y="73" class="glabel" text-anchor="middle" fill="#1b2a41">function</text>
+      <text x="305" y="90" class="mono" font-size="13" text-anchor="middle" fill="#1b2a41">adder(k)</text>
+      <rect x="400" y="30" width="140" height="70" rx="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="412" y="52" class="glabel">make_adder frame</text>
+      <text x="412" y="80" class="mono" font-size="14">n   3</text>
+      <g fill="none" stroke="var(--ink)" stroke-width="1.8">
+        <path d="M164,76 H236" marker-end="url(#arr)"/>
+        <path d="M370,75 H396" marker-end="url(#arr)"/>
+      </g>
+      <text x="383" y="128" class="gsmall" text-anchor="middle">the function remembers the frame it was</text>
+      <text x="383" y="144" class="gsmall" text-anchor="middle">made in, so n = 3 outlives the call</text>
+    </svg>
+    <figcaption>After <code>add_three = make_adder(3)</code>. The dashed frame has finished running, but the function still points to it, so it isn't thrown away.</figcaption>
+  </figure>
+
+  <div class="problem" data-id="hof-p4" data-answer="16">
+    <span class="qtag">Practice 4</span>
+    <p class="q">With <code>def compose(f, g): return lambda x: f(g(x))</code>, what does <code>compose(lambda x: x * x, lambda x: x + 1)(3)</code> return?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary><code>f(g(x))</code> runs <code>g</code> first. Here <code>g</code> adds 1 and <code>f</code> squares.</details>
+    <div class="solution" hidden><p>g(3) = 4, then f(4) = <strong>16</strong>. <code>compose</code> takes two functions and returns a new one, which closes over both <code>f</code> and <code>g</code>.</p></div>
+  </div>
+
+  <div class="mcq" data-id="hof-q2" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">A classic trap. What does this print?</p>
+<pre><code>fs = [lambda: i for i in range(3)]
+print(fs[0]())</code></pre>
+    <div class="choices">
+      <button type="button" data-why="That's what most people expect. But when does the lambda look up i?">0</button>
+      <button type="button">2</button>
+      <button type="button" data-why="Each lambda takes no arguments and returns i; nothing produces 3.">3</button>
+      <button type="button" data-why="The lambdas are created fine; they just all share one variable.">An error</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>2</strong>. A closure remembers the <em>variable</em>, not its value at the time. All three lambdas share the same <code>i</code>, and by the time you call one, the loop has finished with <code>i</code> = 2. The usual fix captures the current value as a default argument, which is evaluated when the lambda is created: <code>lambda i=i: i</code>. JavaScript had the same bug with <code>var</code> in loops, which is one reason <code>let</code> was added.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="decorators">Decorators</h2>
+  <p>Put the two ideas together, a function that takes a function and returns a new function, and you get a <span class="hl">decorator</span>: a way to add behavior around a function without changing its code.</p>
+<pre><code>def logged(f):
+    def wrapper(*args):
+        print("calling", f.__name__, "with", args)
+        return f(*args)
+    return wrapper
+
+@logged                  # means: square = logged(square)
+def square(x):
+    return x * x
+
+square(4)                # prints: calling square with (4,)  and returns 16</code></pre>
+  <p>The <code>@</code> line is shorthand for reassigning the name to the wrapped version. Python's standard library uses decorators for caching (<code>@functools.cache</code>, in the next lesson), web frameworks use them to connect URLs to functions (<code>@app.route("/")</code>), and test frameworks use them to mark tests.</p>
+
+  <div class="mcq" data-id="hof-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">Which line means exactly the same as putting <code>@timer</code> above <code>def run(): ...</code>?</p>
+    <div class="choices">
+      <button type="button" data-why="That calls run first and passes its result. The decorator receives the function itself.">run = timer(run())</button>
+      <button type="button" data-why="That would call timer with no arguments and ignore it.">timer(); run = run</button>
+      <button type="button" data-why="This passes timer to run, which is backward.">run = run(timer)</button>
+      <button type="button">run = timer(run)</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong><code>run = timer(run)</code></strong>. The decorator gets the function object (no parentheses, so it isn't called), and the name <code>run</code> is rebound to whatever the decorator returns.</p></div>
+  </div>
+
+  <p>Higher-order functions are everywhere once you look. In JavaScript, <code>button.addEventListener("click", handler)</code> passes a function to be called later; that's called a <span class="hl">callback</span>. Data tools like pandas and Spark are built around map and filter. And many AI frameworks wrap your functions in decorators to turn them into tools a model can call.</p>
+
+  <div class="mcq" data-id="hof-q4" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">What does <code>make_adder(5)</code> evaluate to?</p>
+    <div class="choices">
+      <button type="button">A function that adds 5 to its argument</button>
+      <button type="button" data-why="Nothing is added yet; there's no k until you call the result.">5</button>
+      <button type="button" data-why="make_adder returns adder, so it returns something.">None</button>
+      <button type="button" data-why="One argument is exactly what make_adder takes.">An error, because adder needs an argument</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>A function.</strong> Python prints it as something like <code>&lt;function make_adder.&lt;locals&gt;.adder at 0x...&gt;</code>. You have to call it, <code>make_adder(5)(10)</code>, to get a number (15).</p></div>
+  </div>
+
+  <div class="problem" data-id="hof-p5" data-answer="24">
+    <span class="qtag">Practice 5</span>
+    <p class="q">What does <code>functools.reduce(lambda a, b: a * b, [1, 2, 3, 4])</code> return?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>It combines left to right: ((1 × 2) × 3) × 4.</details>
+    <div class="solution" hidden><p><strong>24</strong>, which is 4! from lesson 5's factorial, with no recursion and no loop in sight. Python 3.8 added <code>math.prod</code> for exactly this.</p></div>
+  </div>
+
+  <h2>Where this idea took off</h2>
+  <div class="story">
+    <h3>MapReduce, 2004</h3>
+    <p>Google needed to process the whole web: count words across billions of pages, build its search index, analyze logs. Jeffrey Dean and Sanjay Ghemawat noticed that most of these jobs had the same shape: <em>map</em> a function over every record, then <em>reduce</em> the results by key. So they wrote one system that ran the map and reduce functions across thousands of machines and handled crashed machines automatically. Engineers only supplied the two functions. Their 2004 paper says the idea came straight from the map and reduce of Lisp and other functional languages. An open-source copy, Hadoop, powered a generation of "big data" systems, and Spark, its successor, is built on the same higher-order functions you saw in this lesson.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>A higher-order function takes or returns a function. Use one to name a pattern, with a hole for the part that varies.</li>
+    <li>A lambda is a one-expression function. If it needs a second line, use <code>def</code>.</li>
+    <li>Map transforms every item, filter keeps some, reduce combines them. In Python, comprehensions usually read better.</li>
+    <li>A function defined inside another closes over its variables. It remembers the variable, not the value.</li>
+    <li>A decorator is <code>f = decorator(f)</code> with nicer syntax.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>Build a tiny pipeline helper that chains functions, then use it:</p>
+<pre><code>def pipeline(*steps):
+    def run(x):
+        for step in steps:
+            x = step(x)
+        return x
+    return run
+
+clean = pipeline(str.strip, str.lower, lambda s: s.replace(" ", "-"))
+print(clean("  Hello World "))    # hello-world</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 1</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="hof">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Recursion in depth</strong>, where functions call themselves in more than one way at once, and you'll watch a call tree explode and then shrink with memoization.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.composingprograms.com/pages/16-higher-order-functions.html" target="_blank" rel="noopener">Composing Programs 1.6: Higher-order functions</a><span>The CS61A textbook chapter this lesson follows, including <code>summation</code>, closures, and environment diagrams.</span></li>
+      <li><a href="https://cs61a.org/" target="_blank" rel="noopener">Berkeley CS61A</a><span>Lectures, labs, and the Hog project, which is built almost entirely from higher-order functions.</span></li>
+      <li><a href="https://docs.python.org/3/howto/functional.html" target="_blank" rel="noopener">Python docs: Functional programming HOWTO</a><span>Iterators, generators, map, filter, comprehensions, and <code>functools</code>.</span></li>
+      <li><a href="https://docs.python.org/3/library/functools.html" target="_blank" rel="noopener">Python docs: functools</a><span><code>reduce</code>, <code>cache</code>, <code>partial</code>, and <code>wraps</code> for writing decorators properly.</span></li>
+      <li><a href="https://peps.python.org/pep-0318/" target="_blank" rel="noopener">PEP 318: Decorators for functions and methods</a><span>The 2003 proposal that added <code>@</code> syntax to Python, and why.</span></li>
+      <li><a href="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/6515/sicp.zip/full-text/book/book-Z-H-12.html" target="_blank" rel="noopener">SICP 1.3: Formulating abstractions with higher-order procedures</a><span>The classic MIT textbook section that <code>summation</code> comes from, in Scheme.</span></li>
+      <li><a href="https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/" target="_blank" rel="noopener">MapReduce: Simplified Data Processing on Large Clusters</a><span>Dean and Ghemawat's 2004 paper. Section 2 is readable after this lesson.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Lambda_calculus" target="_blank" rel="noopener">Lambda calculus (Wikipedia)</a><span>Church's model of computation built from functions alone, where "lambda" comes from.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Pipeline builder: 1..10 through a list of map/filter steps, with an optional final reducer.
+  (function () {
+    const STEPS = {
+      'filter: even':  { kind: 'filter', f: x => x % 2 === 0, py: 'x % 2 == 0' },
+      'filter: odd':   { kind: 'filter', f: x => x % 2 !== 0, py: 'x % 2 == 1' },
+      'filter: > 5':   { kind: 'filter', f: x => x > 5,       py: 'x > 5' },
+      'map: square':   { kind: 'map',    f: x => x * x,       py: 'x * x' },
+      'map: double':   { kind: 'map',    f: x => x * 2,       py: 'x * 2' },
+      'map: add 1':    { kind: 'map',    f: x => x + 1,       py: 'x + 1' },
+      'reduce: sum':   { kind: 'reduce', f: xs => xs.reduce((a, b) => a + b, 0), py: 'sum' },
+      'reduce: max':   { kind: 'reduce', f: xs => xs.length ? Math.max(...xs) : 'error: empty', py: 'max' },
+    };
+    let steps = ['filter: even', 'map: square'];
+    const start = Array.from({ length: 10 }, (_, i) => i + 1);
+    const $ = id => document.getElementById(id);
+
+    const groups = { filter: 'Filter', map: 'Map', reduce: 'Reduce' };
+    Object.entries(groups).forEach(([kind, label]) => {
+      const row = document.createElement('div');
+      row.innerHTML = `<span>${label}</span>`;
+      Object.keys(STEPS).filter(k => STEPS[k].kind === kind).forEach(k => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn quiet'; b.style.padding = '.3em .7em'; b.style.fontSize = '.85rem';
+        b.textContent = '+ ' + k.split(': ')[1];
+        b.onclick = () => {
+          if (steps.length && STEPS[steps[steps.length - 1]].kind === 'reduce') steps.pop(); // a reducer must be last
+          if (steps.length >= 5) return UI.toast('Five steps is plenty. Remove one first.');
+          steps.push(k); render();
+        };
+        row.append(b);
+      });
+      $('adders').append(row);
+    });
+
+    const chips = (xs, keep) => xs.map((x, i) => `<span class="chip${keep && !keep[i] ? ' out' : ''}">${x}</span>`).join('');
+
+    function render() {
+      let xs = start.slice(), html = `<div class="stage"><span class="label">nums</span><div class="chips">${chips(xs)}</div><span></span></div>`;
+      steps.forEach((k, i) => {
+        const s = STEPS[k];
+        let body;
+        if (s.kind === 'filter') { const keep = xs.map(s.f); body = chips(xs, keep); xs = xs.filter(s.f); }
+        else if (s.kind === 'map') { xs = xs.map(s.f); body = chips(xs); }
+        else { const r = s.f(xs); body = `<span class="chip result">${r}</span>`; xs = null; }
+        html += `<div class="stage"><span class="label">${k}</span><div class="chips">${body || '<span class="chip">empty</span>'}</div><button class="x" type="button" data-i="${i}" aria-label="Remove ${k}">×</button></div>`;
+      });
+      $('pipe').innerHTML = html;
+      $('pipe').querySelectorAll('.x').forEach(b => b.onclick = () => { steps.splice(+b.dataset.i, 1); render(); });
+
+      // The nested-call version always works.
+      let expr = 'nums', reducer = null;
+      steps.forEach(k => {
+        const s = STEPS[k];
+        if (s.kind === 'reduce') reducer = s.py;
+        else expr = `${s.kind}(lambda x: ${s.py}, ${expr})`;
+      });
+      let code = `nums = list(range(1, 11))\n` + (reducer ? `${reducer}(${expr})` : steps.length ? `list(${expr})` : 'nums');
+      // A comprehension fits when there's at most one map, and every filter comes before it.
+      const kinds = steps.filter(k => STEPS[k].kind !== 'reduce').map(k => STEPS[k].kind);
+      const maps = kinds.filter(k => k === 'map').length;
+      if (steps.length && maps <= 1 && kinds.indexOf('map') === (maps ? kinds.length - 1 : -1)) {
+        const conds = steps.filter(k => STEPS[k].kind === 'filter').map(k => STEPS[k].py);
+        const m = steps.find(k => STEPS[k].kind === 'map');
+        const comp = `[${m ? STEPS[m].py : 'x'} for x in nums${conds.length ? ' if ' + conds.join(' and ') : ''}]`;
+        code += `\n\n# Same thing as a comprehension:\n${reducer ? `${reducer}(${comp})` : comp}`;
+      }
+      $('pipe-code').textContent = code;
+    }
+    render();
+  })();
+</script>
+</body>
+</html>
