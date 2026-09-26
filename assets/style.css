@@ -117,8 +117,9 @@ strong { font-weight: 650; }
 .figure figcaption { font: .9rem/1.5 var(--sans); color: var(--ink-2); margin-top: .6rem; }
 .panel { background: var(--panel); border: 1.5px solid var(--ink); border-radius: 8px; padding: 1.25rem 1.4rem; margin: 2rem 0; }
 .panel h3:first-child, .panel h4:first-child { margin-top: 0; }
-.try { font: 600 .85rem var(--sans); color: var(--ink-2); margin-bottom: .6rem; display: flex; gap: .4rem; align-items: center; }
-.try::before { content: ''; flex: none; width: 10px; height: 10px; background: var(--hl); border: 1.5px solid var(--ink); border-radius: 50%; }
+/* Block (not flex) so inline code in the text flows normally; the dot hangs in the left padding */
+.try { font: 600 .85rem/1.45 var(--sans); color: var(--ink-2); margin-bottom: .6rem; position: relative; padding-left: 1.05rem; }
+.try::before { content: ''; position: absolute; left: 0; top: .32em; width: 10px; height: 10px; background: var(--hl); border: 1.5px solid var(--ink); border-radius: 50%; }
 
 .callout { border-left: 4px solid var(--hl); padding: .2rem 0 .2rem 1.1rem; margin: 1.6rem 0; }
 .callout p:last-child { margin-bottom: 0; }

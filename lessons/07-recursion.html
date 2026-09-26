@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recursion in depth | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .tree-top { display: flex; flex-wrap: wrap; gap: .6rem 1.2rem; align-items: center; margin-bottom: .6rem; }
+  .tree-top label { font: .9rem var(--sans); display: flex; gap: .4rem; align-items: center; }
+  .tree-wrap { overflow-x: auto; background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; }
+  #tree { display: block; margin: 0 auto; max-width: none; }  /* full size; the wrapper scrolls sideways */
+  #tree .edge { stroke: var(--rule); stroke-width: 1.5; }
+  #tree .edge.live { stroke: var(--ink); stroke-width: 2; }
+  #tree circle { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+  #tree .active circle { fill: var(--hl); stroke-width: 2.5; }
+  #tree .cached circle { stroke-dasharray: 3 3; fill: var(--paper); }
+  #tree .n { font: 600 12px var(--mono); text-anchor: middle; dominant-baseline: central; }
+  #tree .active .n { fill: #1b2a41; }
+  #tree .val { font: 11px var(--mono); text-anchor: middle; fill: var(--ink-2); }
+  .tree-stats { display: flex; flex-wrap: wrap; gap: .4rem 1.6rem; font: .95rem var(--sans); margin: .8rem 0 .4rem; }
+  .tree-stats b { font-family: var(--mono); }
+  .tree-msg { font: .95rem var(--sans); margin: 0 0 .6rem; min-height: 1.4em; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 2: Programming with abstraction, lesson 2 of 5</div>
+    <h1>Recursion in depth</h1>
+    <p class="lede">In stage 1, factorial called itself once per step, so its calls formed a straight line. Many problems need a function to call itself <em>more than once</em>. Then the calls branch into a tree, which is where recursion gets both powerful and, if you're careless, extremely slow.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="tree-title">
+    <h2 id="tree-title" style="margin-top:0;font-size:1.25rem">The call tree of fib(n)</h2>
+    <div class="try">Each circle is one call, <code>fib(n)</code>; the number under it is what it returned. Step through to watch the calls happen in order, then turn on the cache.</div>
+    <div class="tree-top">
+      <div class="seg" id="tree-n" role="group" aria-label="n"></div>
+      <label><input type="checkbox" id="tree-memo"> Cache results (memoize)</label>
+    </div>
+    <div class="tree-wrap"><svg id="tree" role="img" aria-label="Call tree"></svg></div>
+    <div class="tree-stats" id="tree-stats"></div>
+    <p class="tree-msg" id="tree-msg" aria-live="polite"></p>
+    <div class="tr-controls">
+      <button class="btn quiet" type="button" id="tree-back">Back</button>
+      <button class="btn" type="button" id="tree-next">Next step</button>
+      <button class="btn quiet" type="button" id="tree-play">Play</button>
+      <input type="range" id="tree-range" min="0" value="0" aria-label="Step">
+    </div>
+  </section>
+  <p>The highlighted path is the call stack from stage 1: the calls that have started but not yet returned. The tree is every call the function ever makes. Keep it open while you read; most of this lesson is about its shape.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Write tree-recursive functions and draw their call trees.</li>
+      <li>Explain why naive tree recursion can take exponential time, and fix it with memoization.</li>
+      <li>Solve counting problems by splitting them into smaller cases.</li>
+      <li>Write recursive functions over nested data, like lists inside lists.</li>
+      <li>Use the "recursive leap of faith" to write recursion without tracing every call.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#tree-rec">Tree recursion</a></li>
+      <li><a href="#memo">Memoization</a></li>
+      <li><a href="#counting">Counting with recursion</a></li>
+      <li><a href="#nested">Recursive data</a></li>
+      <li><a href="#faith">The recursive leap of faith</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="tree-rec">Tree recursion</h2>
+  <p>The Fibonacci numbers start 0, 1, and each one after that is the sum of the two before it: 0, 1, 1, 2, 3, 5, 8, 13, ... That definition turns straight into code:</p>
+<pre><code>def fib(n):
+    if n &lt; 2:                        # base cases: fib(0) = 0, fib(1) = 1
+        return n
+    return fib(n - 1) + fib(n - 2)   # two recursive calls</code></pre>
+  <p>Because each call makes two more calls, the calls form a tree, so this is called <span class="hl">tree recursion</span>. Python still runs them one at a time, depth first: <code>fib(n - 1)</code> and everything under it finishes before <code>fib(n - 2)</code> even starts. Step through the tree above to see that order.</p>
+
+  <div class="problem" data-id="rec-p1" data-answer="15">
+    <span class="qtag">Practice 1</span>
+    <p class="q">How many calls to <code>fib</code> happen in total when you run <code>fib(5)</code>, counting the first one?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Count the circles in the tree for n = 5 with the cache off. Or use calls(n) = 1 + calls(n − 1) + calls(n − 2), with calls(0) = calls(1) = 1.</details>
+    <div class="solution" hidden><p><strong>15</strong> calls to compute the answer 5. Look at the tree: <code>fib(3)</code> is computed twice, <code>fib(2)</code> three times, and <code>fib(1)</code> five times. The same work is done over and over.</p></div>
+  </div>
+
+  <p>That repeated work grows fast. The number of calls grows roughly like the Fibonacci numbers themselves, by about 1.6 times for each step up in n. <code>fib(30)</code> makes 2,692,537 calls to compute 832,040. <code>fib(50)</code> makes about 40 billion calls, enough to keep a fast computer busy for tens of minutes. The algorithm's running time is <span class="hl">exponential</span> in n, the worst kind of growth you'll meet in stage 3.</p>
+
+  <div class="mcq" data-id="rec-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">Why is this <code>fib</code> so slow?</p>
+    <div class="choices">
+      <button type="button" data-why="Calls cost a little, but a loop doing 2.7 million additions would also be slow. The real problem is how many calls there are.">Function calls are slow in Python</button>
+      <button type="button">It solves the same smaller problems again and again</button>
+      <button type="button" data-why="The numbers stay small enough that addition is fast; fib(30) is under a million.">Adding large numbers is expensive</button>
+      <button type="button" data-why="The stack only gets n frames deep; depth isn't the problem here, width is.">The recursion goes too deep</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Repeated subproblems.</strong> There are only 31 different questions to answer for <code>fib(30)</code> (n = 0 to 30), but the tree asks them 2.7 million times. Notice the stack never gets deeper than n, so this is slow without ever overflowing.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="memo">Memoization</h2>
+  <p>The fix is to remember answers. The first time you compute <code>fib(3)</code>, save the result; every later call for <code>fib(3)</code> looks it up instead. This is <span class="hl">memoization</span> (from "memo", a note to yourself). Python has it built in as a decorator, from the last lesson:</p>
+<pre><code>from functools import cache
+
+@cache
+def fib(n):
+    if n &lt; 2:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+fib(100)    # 354224848179261915075, instantly</code></pre>
+  <p>Tick "Cache results" on the tree. Every repeated call now returns immediately from the cache (dashed circles) without branching further. The tree collapses to a single path down the left side with one leaf hanging off each step, and the number of calls drops from exponential to about 2n.</p>
+
+  <div class="problem" data-id="rec-p2" data-answer="9">
+    <span class="qtag">Practice 2</span>
+    <p class="q">With the cache on, how many calls happen for <code>fib(5)</code>, counting calls answered from the cache?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Count every circle, solid and dashed, in the tree for n = 5 with the cache on.</details>
+    <div class="solution" hidden><p><strong>9</strong>: six real computations (n = 5, 4, 3, 2, 1, 0) and three cache hits (1, 2, 3). Down from 15, and the gap grows fast: for n = 30 it's 59 calls instead of 2.7 million.</p></div>
+  </div>
+
+  <div class="mcq" data-id="rec-q2" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">When is it safe to put <code>@cache</code> on a function?</p>
+    <div class="choices">
+      <button type="button" data-why="The function's speed has nothing to do with whether caching gives right answers.">When the function is slow</button>
+      <button type="button" data-why="Caching helps recursive and non-recursive functions alike.">Only when the function is recursive</button>
+      <button type="button" data-why="Caching a function that reads the clock or a file would return stale answers.">Always; it can only make things faster</button>
+      <button type="button">When the same arguments always give the same result, with no side effects</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>Memoization only works for <strong>pure functions</strong> (stage 1, lesson 5). If <code>get_price(item)</code> reads a database, caching it would keep returning the old price forever. The arguments also have to be hashable, so <code>@cache</code> can't be used on a function that takes a list.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="counting">Counting with recursion</h2>
+  <p>Tree recursion shines on counting problems where each choice splits into smaller versions of the same problem. Here's one: <em>you can climb a staircase 1 or 2 steps at a time. How many different ways can you climb n steps?</em></p>
+  <p>Don't try to list the ways. Think about the first move. Either you take 1 step, leaving n − 1 steps to climb, or you take 2, leaving n − 2. Every way to climb starts with exactly one of those, so:</p>
+<pre><code>def climb(n):
+    if n &lt;= 1:          # 0 or 1 steps left: exactly one way (do nothing, or one step)
+        return 1
+    return climb(n - 1) + climb(n - 2)</code></pre>
+  <p>That's the Fibonacci tree again, shifted by one. Most counting problems have the same structure: split the possibilities into cases that don't overlap, count each case recursively, and add.</p>
+
+  <div class="problem" data-id="rec-p3" data-answer="5">
+    <span class="qtag">Practice 3</span>
+    <p class="q">How many ways are there to climb 4 steps, taking 1 or 2 at a time?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>climb(2) = 2 (1+1 or 2), climb(3) = 3. Then climb(4) = climb(3) + climb(2).</details>
+    <div class="solution" hidden><p><strong>5</strong>: 1+1+1+1, 1+1+2, 1+2+1, 2+1+1, and 2+2. The recursion found them without listing any.</p></div>
+  </div>
+
+  <p>A harder classic from CS61A: <em>in how many ways can you write n as a sum of positive whole numbers no bigger than m?</em> The split this time is "use at least one m" versus "use no m at all":</p>
+<pre><code>def count_partitions(n, m):
+    if n == 0:
+        return 1                       # nothing left to make: one way (use nothing)
+    if n &lt; 0 or m == 0:
+        return 0                       # overshot, or no parts left to use
+    with_m = count_partitions(n - m, m)        # use one m, keep m allowed
+    without_m = count_partitions(n, m - 1)     # never use m
+    return with_m + without_m
+
+count_partitions(6, 4)    # 9</code></pre>
+
+  <div class="problem" data-id="rec-p4" data-answer="5">
+    <span class="qtag">Practice 4</span>
+    <p class="q">What is <code>count_partitions(5, 3)</code>? (Ways to write 5 using parts of size 3 or less.)</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Here listing works as a check. Start with the sums that use a 3, then those whose biggest part is 2, then all 1s.</details>
+    <div class="solution" hidden><p><strong>5</strong>: 3+2, 3+1+1, 2+2+1, 2+1+1+1, and 1+1+1+1+1. Order doesn't matter here, which is why 2+3 isn't counted separately. The "biggest part allowed" parameter <code>m</code> is what prevents double counting.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="nested">Recursive data</h2>
+  <p>Some data has the same shape inside as outside: a folder contains files and folders, a comment thread contains replies that have replies, an HTML element contains elements. Recursion is the natural way to process it, because the function's structure matches the data's structure. A list that may contain lists is the simplest example:</p>
+<pre><code>def deep_sum(x):
+    if not isinstance(x, list):       # base case: a plain number
+        return x
+    return sum(deep_sum(item) for item in x)
+
+deep_sum([1, [2, 3], [[4]]])          # 10</code></pre>
+
+  <div class="problem" data-id="rec-p5" data-answer="15">
+    <span class="qtag">Practice 5</span>
+    <p class="q">What does <code>deep_sum([1, [2, [3, 4]], 5])</code> return?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Every number gets added once, however deep it sits.</details>
+    <div class="solution" hidden><p>1 + 2 + 3 + 4 + 5 = <strong>15</strong>. A loop can't easily do this, because it doesn't know in advance how many levels deep to go. The recursion goes exactly as deep as the data does.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="faith">The recursive leap of faith</h2>
+  <p>You can't trace 2.7 million calls in your head, and you don't need to. CS61A calls the trick the <span class="hl">recursive leap of faith</span>: when writing a recursive function, <strong>assume the recursive call already works</strong> on the smaller input, and only ask whether your code uses that answer correctly. Then check two things:</p>
+  <ul>
+    <li><strong>Base case:</strong> does the smallest input return the right answer without recursing?</li>
+    <li><strong>Progress:</strong> does every recursive call move closer to a base case?</li>
+  </ul>
+  <p>If both hold, the function is correct by induction, the same argument as a proof in a discrete math course. That's how <code>deep_sum</code> was written: trust that <code>deep_sum(item)</code> returns the sum of any inner list, and just add those up.</p>
+
+  <div class="mcq" data-id="rec-q3" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">You're writing <code>count_items(folder)</code>, which counts the files in a folder and all its subfolders. Which line uses the leap of faith correctly inside the loop over the folder's contents?</p>
+    <div class="choices">
+      <button type="button">If the entry is a folder: total += count_items(entry)</button>
+      <button type="button" data-why="That counts the subfolder as one file and ignores what's inside it.">If the entry is a folder: total += 1</button>
+      <button type="button" data-why="That restarts on the same folder forever; it never makes progress.">If the entry is a folder: total += count_items(folder)</button>
+      <button type="button" data-why="That only looks one level down. Folders inside subfolders are missed.">If the entry is a folder: total += len(entry.files)</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong><code>count_items(entry)</code></strong>. Trust that it correctly counts everything inside the subfolder, however deep, and add that number. The argument is smaller (a subfolder), so it makes progress, and a folder with no subfolders is the base case.</p></div>
+  </div>
+
+  <p>One practical limit: Python doesn't optimize deep recursion. Some languages reuse the frame when a function's last action is calling itself (called tail-call optimization), so recursion can run as long as a loop. Python's creator chose not to, to keep tracebacks complete, so in Python recursion is best for problems whose depth stays small, like trees, and loops are best for walking long sequences.</p>
+
+  <div class="mcq" data-id="rec-q4" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">What happens if you sum a 10,000-item list with <code>def total(xs): return 0 if not xs else xs[0] + total(xs[1:])</code>?</p>
+    <div class="choices">
+      <button type="button" data-why="Each call adds a frame, and nothing reuses frames in Python.">It works, because Python reuses the frame for the last call</button>
+      <button type="button" data-why="It's linear recursion, one call per item: no branching and no repeated work.">It's slow because of repeated subproblems</button>
+      <button type="button">It crashes with RecursionError</button>
+      <button type="button" data-why="It never gets that far.">It returns the right answer, just slowly</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>Ten thousand nested calls blow past Python's limit of about 1,000 frames: <strong>RecursionError</strong>. (Each <code>xs[1:]</code> also copies the list, which makes it slow even for short lists.) Use <code>sum(xs)</code> or a loop. Recursion fits when the depth is small even if the data is big, like a balanced tree with a million items that's only about 20 levels deep.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>Cloudflare's regex outage, 2019</h3>
+    <p>On July 2, 2019, Cloudflare deployed a new rule to its web firewall, and CPU use on its servers worldwide jumped to 100%. For 27 minutes, millions of websites behind Cloudflare returned errors. The cause was one regular expression containing the pattern <code>.*(?:.*=.*)</code>. Regex engines like the one Cloudflare used match by trying one choice, and backtracking to try another when it fails, which is a tree recursion. With several <code>.*</code> pieces that can each match any amount of text, the number of ways to split a string grows explosively with its length, and the engine tries them all before giving up. It's the naive <code>fib</code> tree again, running on live traffic. Cloudflare's fixes included switching to regex engines that guarantee linear-time matching.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>A function that calls itself more than once makes a call tree. Python explores it depth first, one call at a time.</li>
+    <li>Repeated subproblems make naive tree recursion exponential. Memoize pure functions with <code>@functools.cache</code>.</li>
+    <li>For counting problems, split the possibilities into cases that don't overlap, count each recursively, and add.</li>
+    <li>Recursion matches recursive data: folders, nested lists, trees, JSON.</li>
+    <li>Leap of faith: trust the recursive call, then check the base case and that each call makes progress.</li>
+    <li>Python has no tail-call optimization. Keep recursion depth small; use loops for long sequences.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>Time the difference memoization makes:</p>
+<pre><code>import time
+from functools import cache
+
+def slow_fib(n):
+    return n if n &lt; 2 else slow_fib(n - 1) + slow_fib(n - 2)
+
+@cache
+def fast_fib(n):
+    return n if n &lt; 2 else fast_fib(n - 1) + fast_fib(n - 2)
+
+for f in (slow_fib, fast_fib):
+    start = time.perf_counter()
+    f(32)
+    print(f.__name__, round(time.perf_counter() - start, 4), "seconds")</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 2</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="recursion">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Sequences, dictionaries, and data abstraction</strong>: how to build data types whose users never need to know what's inside.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.composingprograms.com/pages/17-recursive-functions.html" target="_blank" rel="noopener">Composing Programs 1.7: Recursive functions</a><span>Tree recursion, <code>count_partitions</code>, and the leap of faith, from the CS61A textbook.</span></li>
+      <li><a href="https://cs61a.org/" target="_blank" rel="noopener">Berkeley CS61A</a><span>Its recursion lectures and labs have many more counting problems to practice on.</span></li>
+      <li><a href="https://web.stanford.edu/class/cs106b/" target="_blank" rel="noopener">Stanford CS106B: Programming Abstractions</a><span>Spends several weeks on recursion, including recursive backtracking.</span></li>
+      <li><a href="https://docs.python.org/3/library/functools.html#functools.cache" target="_blank" rel="noopener">Python docs: functools.cache</a><span>The memoizing decorator, and <code>lru_cache</code> for caches with a size limit.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Memoization" target="_blank" rel="noopener">Memoization (Wikipedia)</a><span>Where the word comes from (Donald Michie, 1968) and how it relates to dynamic programming.</span></li>
+      <li><a href="https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/" target="_blank" rel="noopener">Cloudflare: Details of the July 2, 2019 outage</a><span>The full write-up, including an explanation of regex backtracking with diagrams.</span></li>
+      <li><a href="http://neopythonic.blogspot.com/2009/04/tail-recursion-elimination.html" target="_blank" rel="noopener">Guido van Rossum: Tail recursion elimination</a><span>Python's creator explains why Python doesn't optimize tail calls.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Call tree of fib(n): build every call/return event, lay the tree out, then replay events up to step k.
+  (function () {
+    const $ = id => document.getElementById(id);
+    let n = 5, k = 0, events = [], nodes = [], timer = null;
+
+    function build() {
+      events = []; nodes = [];
+      const memo = $('tree-memo').checked, cache = new Map();
+      (function walk(m, depth, parent) {
+        const node = { m, depth, parent, kids: [], val: null, cached: false, id: nodes.length };
+        nodes.push(node); if (parent) parent.kids.push(node);
+        events.push({ t: 'call', node });
+        if (memo && cache.has(m)) { node.val = cache.get(m); node.cached = true; }
+        else if (m < 2) node.val = m;
+        else { node.val = walk(m - 1, depth + 1, node) + walk(m - 2, depth + 1, node); cache.set(m, node.val); }
+        if (m < 2) cache.set(m, m);
+        events.push({ t: 'ret', node });
+        return node.val;
+      })(n, 0, null);
+      // Tidy layout: leaves get consecutive columns; a parent sits over the middle of its children.
+      let col = 0;
+      (function place(node) {
+        node.kids.forEach(place);
+        node.x = node.kids.length ? (node.kids[0].x + node.kids[node.kids.length - 1].x) / 2 : col++;
+      })(nodes[0]);
+      $('tree-range').max = events.length;
+      k = events.length; // start on the finished tree
+    }
+
+    function render() {
+      const W = 36, H = 52, pad = 22;
+      const cols = Math.max(...nodes.map(d => d.x)) + 1, depth = Math.max(...nodes.map(d => d.depth)) + 1;
+      const width = cols * W + pad * 2, height = depth * H + pad * 2;
+      const svg = $('tree');
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.setAttribute('width', Math.max(width, 300)); svg.setAttribute('height', height);
+      const shown = new Set(), returned = new Set();
+      events.slice(0, k).forEach(e => (e.t === 'call' ? shown : returned).add(e.node));
+      const active = [...shown].filter(d => !returned.has(d));
+      const px = d => pad + d.x * W + W / 2, py = d => pad + d.depth * H + 14;
+      let html = '';
+      nodes.forEach(d => { if (d.parent && shown.has(d)) html += `<line class="edge${active.includes(d) ? ' live' : ''}" x1="${px(d.parent)}" y1="${py(d.parent)}" x2="${px(d)}" y2="${py(d)}"/>`; });
+      nodes.forEach(d => {
+        if (!shown.has(d)) return;
+        html += `<g class="${active.includes(d) ? 'active' : ''}${d.cached ? ' cached' : ''}"><circle cx="${px(d)}" cy="${py(d)}" r="13"/><text class="n" x="${px(d)}" y="${py(d)}">${d.m}</text>` +
+          (returned.has(d) ? `<text class="val" x="${px(d)}" y="${py(d) + 27}">${d.val}</text>` : '') + '</g>';
+      });
+      svg.innerHTML = html;
+
+      const calls = events.slice(0, k).filter(e => e.t === 'call').length, total = events.length / 2;
+      const counts = {};
+      nodes.forEach(d => { if (!d.cached) counts[d.m] = (counts[d.m] || 0) + 1; });
+      const repeats = Object.entries(counts).filter(([, c]) => c > 1).sort((a, b) => b[0] - a[0]).map(([m, c]) => `fib(${m}) ×${c}`);
+      $('tree-stats').innerHTML = `<span>Calls so far: <b>${calls}</b> of <b>${total}</b></span>` +
+        `<span>${repeats.length ? `Computed more than once: <b>${repeats.join(', ')}</b>` : 'Nothing is computed twice.'}</span>`;
+      const e = events[k - 1];
+      $('tree-msg').textContent = k === 0 ? `Press Next step to call fib(${n}).`
+        : e.t === 'call' ? (e.node.cached ? `fib(${e.node.m}) is already in the cache: no new calls needed.` : `Call fib(${e.node.m}). The stack is now ${active.length} deep.`)
+        : k === events.length ? `Done: fib(${n}) = ${nodes[0].val}, using ${total} calls.`
+        : `fib(${e.node.m}) returns ${e.node.val}.`;
+      $('tree-range').value = k;
+      $('tree-back').disabled = k === 0;
+      $('tree-next').disabled = k === events.length;
+    }
+
+    // On narrow screens the tree scrolls; start centered on the root.
+    const center = () => { const w = $('tree').parentElement; w.scrollLeft = (w.scrollWidth - w.clientWidth) / 2; };
+    const go = v => { k = Math.max(0, Math.min(events.length, v)); render(); };
+    function stop() { clearInterval(timer); timer = null; $('tree-play').textContent = 'Play'; }
+    [3, 4, 5, 6, 7].forEach(v => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = `fib(${v})`; b.setAttribute('aria-pressed', v === n);
+      b.onclick = () => { stop(); n = v; [...$('tree-n').children].forEach(c => c.setAttribute('aria-pressed', c === b)); build(); render(); center(); };
+      $('tree-n').append(b);
+    });
+    $('tree-memo').onchange = () => { stop(); build(); render(); };
+    $('tree-back').onclick = () => { stop(); go(k - 1); };
+    $('tree-next').onclick = () => { stop(); go(k + 1); };
+    $('tree-range').oninput = () => { stop(); go(+$('tree-range').value); };
+    $('tree-play').onclick = () => {
+      if (timer) return stop();
+      if (k === events.length) k = 0;
+      $('tree-play').textContent = 'Pause';
+      timer = setInterval(() => { go(k + 1); if (k === events.length) stop(); }, 350);
+    };
+    build(); render(); center();
+  })();
+</script>
+</body>
+</html>

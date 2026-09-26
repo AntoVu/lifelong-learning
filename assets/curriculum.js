@@ -20,7 +20,7 @@ window.CURRICULUM = [
     sources: ['Berkeley CS61A', 'Stanford CS106B', 'MIT 6.102'],
     lessons: [
       { id: 'hof', title: 'Higher-order functions', href: 'lessons/06-higher-order-functions.html', minutes: 45 },
-      { id: 'recursion', title: 'Recursion in depth' },
+      { id: 'recursion', title: 'Recursion in depth', href: 'lessons/07-recursion.html', minutes: 45 },
       { id: 'data-abstraction', title: 'Sequences, dictionaries, and data abstraction' },
       { id: 'objects', title: 'Objects and classes' },
       { id: 'interpreters', title: 'Interpreters: programs that run programs' },
