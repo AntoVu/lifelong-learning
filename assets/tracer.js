@@ -1,9 +1,10 @@
 // Step-through code tracer used by lessons 4 and 5, in the style of Python Tutor.
 // Traces are recorded ahead of time by running the real Python program under sys.settrace
 // (ai_resources/gentrace.py). Each step:
-//   { line (0 = finished), frames: [{ fn, vars: [[name, value, tag]] }], heap: { tag: { type, items } }, out, ret? }
-// Numbers and strings are drawn inline. A tagged value (a list, dict, or set) is drawn once under "Objects",
-// with an arrow from every name that points at it, so aliasing is visible.
+//   { line (0 = finished), frames: [{ fn, vars: [[name, value, tag]] }],
+//     heap: { tag: { type, kind: 'seq' | 'map', items: [[label, value, tag]] } }, out, ret? }
+// Numbers and strings are drawn inline. A tagged value (a list, dict, set, or object) is drawn once under
+// "Objects", with an arrow from every name or field that points at it, so sharing is visible.
 (function () {
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const SVGNS = 'http://www.w3.org/2000/svg';
@@ -74,16 +75,16 @@
       const s = steps[i], prev = steps[i - 1];
       [...$('.tr-code').children].forEach((li, k) => li.classList.toggle('now', k + 1 === s.line));
 
+      const val = v => (v[2] ? `<span class="tr-ptr" data-to="${esc(v[2])}" title="points to ${esc(v[2])}"></span>` : `<code>${esc(v[1])}</code>`);
       // A name is "changed" if its frame (same depth) didn't have it one step ago, or it now holds something else.
       const before = (d, v) => prev && prev.frames[d] && prev.frames[d].fn === s.frames[d].fn && prev.frames[d].vars.find(x => x[0] === v[0]);
       $('.tr-frames').innerHTML = s.frames.map((f, d) => `
         <div class="tr-frame${d === s.frames.length - 1 ? ' top' : ''}">
-          <div class="tr-fn">${f.fn === 'global' ? 'Global variables' : esc(f.fn) + '()'}</div>
+          <div class="tr-fn">${f.fn === 'global' ? 'Global variables' : esc(f.fn)}</div>
           ${f.vars.length ? `<dl>${f.vars.map(v => {
             const old = before(d, v);
             const changed = prev && (!old || (v[2] ? old[2] !== v[2] : old[1] !== v[1]));
-            const val = v[2] ? `<span class="tr-ptr" data-to="${esc(v[2])}" title="points to ${esc(v[2])}"></span>` : `<code>${esc(v[1])}</code>`;
-            return `<dt>${esc(v[0])}</dt><dd class="${changed ? 'changed' : ''}">${val}</dd>`;
+            return `<dt>${esc(v[0])}</dt><dd class="${changed ? 'changed' : ''}">${val(v)}</dd>`;
           }).join('')}</dl>` : '<p class="tr-empty">No variables yet</p>'}
           ${s.ret !== undefined && d === s.frames.length - 1 ? `<p class="tr-ret">returns <code>${esc(s.ret)}</code></p>` : ''}
         </div>`).reverse().join(''); // newest call on top
@@ -92,16 +93,21 @@
       $('.tr-heapwrap').hidden = !heap.length;
       $('.tr-heap').innerHTML = heap.map(([tag, o]) => {
         const old = prev && prev.heap && prev.heap[tag];
-        const cells = o.items.map((x, k) => `<span class="tr-item${old && old.items[k] !== x ? ' changed' : ''}"><small>${k}</small><code>${esc(x)}</code></span>`).join('');
-        return `<div class="tr-obj" data-tag="${esc(tag)}"><span class="tr-type">${esc(o.type)}</span>${cells || '<span class="tr-item"><code>empty</code></span>'}</div>`;
+        const was = item => old && old.items.find(x => x[0] === item[0]);
+        const changed = item => old && (!was(item) || (item[2] ? was(item)[2] !== item[2] : was(item)[1] !== item[1]));
+        // Lists and sets: a row of cells labeled by index. Dicts and objects: rows of field and value.
+        const body = o.kind === 'seq'
+          ? o.items.map(x => `<span class="tr-item${changed(x) ? ' changed' : ''}"><small>${esc(x[0])}</small>${val(x)}</span>`).join('') || '<span class="tr-item"><code>empty</code></span>'
+          : `<dl>${o.items.map(x => `<dt>${esc(x[0])}</dt><dd class="${changed(x) ? 'changed' : ''}">${val(x)}</dd>`).join('') || '<dt>empty</dt><dd></dd>'}</dl>`;
+        return `<div class="tr-obj ${o.kind}" data-tag="${esc(tag)}"><span class="tr-type">${esc(tag)}</span>${body}</div>`;
       }).join('');
 
       $('.tr-stackcap').textContent = s.frames.length > 1 ? 'Call stack (newest call on top)' : 'Variables';
       $('.tr-out').textContent = s.out || ' ';
       const top = s.frames[s.frames.length - 1];
       $('.tr-msg').textContent = s.line === 0 ? 'The program has finished.'
-        : s.ret !== undefined ? `${top.fn}() is returning ${s.ret} to whoever called it.`
-        : `About to run line ${s.line}${top.fn === 'global' ? '' : `, inside ${top.fn}()`}.`;
+        : s.ret !== undefined ? (top.fn.startsWith('class ') ? `${top.fn} is defined.` : `${top.fn} is returning ${s.ret} to whoever called it.`)
+        : `About to run line ${s.line}${top.fn === 'global' ? '' : `, inside ${top.fn}`}.`;
       range.value = i;
       $('.tr-count').textContent = `Step ${i + 1} of ${steps.length}`;
       $('[data-act=back]').disabled = i === 0;
@@ -123,7 +129,7 @@
         const a = p.getBoundingClientRect(), b = obj.getBoundingClientRect();
         const x1 = a.right - box.left, y1 = a.top + a.height / 2 - box.top;
         const x2 = b.right - box.left + 2, y2 = b.top + b.height / 2 - box.top;
-        const gx = right + 8 + k * 6;
+        const gx = right + 8 + k * 5;
         const path = document.createElementNS(SVGNS, 'path');
         path.setAttribute('d', `M${x1},${y1} H${gx} V${y2} H${x2 + 8}`);
         const head = document.createElementNS(SVGNS, 'path');

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Objects and classes | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 2: Programming with abstraction, lesson 4 of 5</div>
+    <h1>Objects and classes</h1>
+    <p class="lede">The last lesson hid data behind functions. Objects go one step further: they bundle data together with the functions that work on it, and they can change over time. Most of the code you'll read at work, in Python, Java, C#, JavaScript, or Swift, is organized this way.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="tr-title">
+    <h2 id="tr-title" style="margin-top:0;font-size:1.25rem">Watch objects being built</h2>
+    <div class="try">Step through each program. Objects appear under "Objects" with their fields, and arrows show which names and fields point at them.</div>
+    <div id="tracer"></div>
+  </section>
+  <p>That's the same tracer from stage 1, now showing objects. Notice in "Two accounts" that both objects come from one class, but each keeps its own <code>balance</code>.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Define a class with <code>__init__</code>, attributes, and methods.</li>
+      <li>Explain what <code>self</code> is and how a method call finds it.</li>
+      <li>Predict attribute lookups through instances, classes, and base classes.</li>
+      <li>Use inheritance to specialize a class, and know when composition is better.</li>
+      <li>Make your own objects work with <code>+</code>, <code>==</code>, <code>print</code>, and <code>for</code>.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#objects">Objects bundle data and behavior</a></li>
+      <li><a href="#classes">Classes</a></li>
+      <li><a href="#self">Methods and self</a></li>
+      <li><a href="#lookup">Class attributes and lookup</a></li>
+      <li><a href="#inheritance">Inheritance and composition</a></li>
+      <li><a href="#special">Special methods</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="objects">Objects bundle data and behavior</h2>
+  <p>You've been using objects all along. In Python, every value is an <span class="hl">object</span>: it has a type, some data, and <span class="hl">methods</span>, functions attached to it that you call with a dot. <code>"hi".upper()</code> calls a method of a string. <code>nums.append(3)</code> calls a method of a list, and that method changes the list's data.</p>
+  <p>Two ideas make objects more than a convenience:</p>
+  <ul>
+    <li><strong>Encapsulation.</strong> An object's data and the code that works on it live together, behind the object's methods. That's the abstraction barrier from the last lesson, built into the language.</li>
+    <li><strong>State.</strong> An object can change over time while staying the same object. A bank account is still the same account after a deposit, with a new balance.</li>
+  </ul>
+
+  <!-- 2 -->
+  <h2 id="classes">Classes</h2>
+  <p>A <span class="hl">class</span> is a blueprint for a kind of object. Each object made from it is an <span class="hl">instance</span>.</p>
+<pre><code>class Account:
+    def __init__(self, owner):          # runs when you create an instance
+        self.owner = owner              # instance attributes: each object gets its own
+        self.balance = 0
+
+    def deposit(self, amount):          # a method
+        self.balance = self.balance + amount
+        return self.balance
+
+a = Account("Ada")                      # create an instance: calls __init__
+a.deposit(100)                          # 100</code></pre>
+  <p>Calling the class, <code>Account("Ada")</code>, creates a new empty object and runs <code>__init__</code> on it to fill it in. The attributes it sets with <code>self.owner = ...</code> belong to that one object. Step through "Two accounts" and watch the frame for <code>Account.__init__()</code> appear twice, once per object.</p>
+
+  <div class="problem" data-id="obj-p1" data-answer="105">
+    <span class="qtag">Practice 1</span>
+    <p class="q">In the "Two accounts" program, what is <code>a.balance</code> at the end?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary><code>b.deposit(30)</code> changes <code>b</code>'s balance, not <code>a</code>'s.</details>
+    <div class="solution" hidden><p>0 + 100 + 5 = <strong>105</strong>. The deposit of 30 went to <code>b</code>, which has its own <code>balance</code>. The program prints <code>105 30</code>.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="self">Methods and self</h2>
+  <p>How does <code>deposit</code> know which account to change? Through its first parameter, <code>self</code>. When you write <code>a.deposit(5)</code>, Python finds <code>deposit</code> in <code>a</code>'s class and calls it with <code>a</code> as the first argument:</p>
+<pre><code>a.deposit(5)
+Account.deposit(a, 5)      # exactly the same call</code></pre>
+  <p>So <code>self</code> isn't magic or a keyword. It's an ordinary parameter, named <code>self</code> by convention, that receives the object the method was called on. In the tracer, every method frame has a <code>self</code> with an arrow to its object. Java, C#, and JavaScript do the same thing but hide the parameter and call it <code>this</code>.</p>
+
+  <div class="mcq" data-id="obj-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">Inside <code>deposit</code>, during the call <code>b.deposit(30)</code>, what is <code>self</code>?</p>
+    <div class="choices">
+      <button type="button" data-why="Methods run on instances. The class is where the method is found, not what it runs on.">The class Account</button>
+      <button type="button" data-why="self is whichever object the method was called on, not the first one created.">The first account created, a</button>
+      <button type="button">The object b</button>
+      <button type="button" data-why="30 is the second argument, amount.">30</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>b</strong>. The call is really <code>Account.deposit(b, 30)</code>, so <code>self</code> is <code>b</code> and <code>amount</code> is 30. Step to that call in the tracer and follow <code>self</code>'s arrow.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="lookup">Class attributes and lookup</h2>
+  <p>Attributes can also live on the class itself, shared by every instance:</p>
+<pre><code>class Account:
+    interest = 0.02            # a class attribute: one value, shared
+
+a, b = Account(), Account()
+a.interest                     # 0.02, found on the class</code></pre>
+  <p>When you read <code>a.interest</code>, Python looks in a fixed order: first the instance's own attributes, then its class, then the class's base classes (next section). The first match wins. Assigning, though, always writes to the instance: <code>a.interest = 0.10</code> gives <code>a</code> its own attribute, which then hides the class's.</p>
+
+  <div class="mcq" data-id="obj-q2" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">Starting from the code above, what does this print?</p>
+<pre><code>a.interest = 0.10
+Account.interest = 0.04
+print(a.interest, b.interest)</code></pre>
+    <div class="choices">
+      <button type="button" data-why="a has its own interest now, so the class value is hidden for a.">0.04 0.04</button>
+      <button type="button">0.1 0.04</button>
+      <button type="button" data-why="Changing the class attribute affects every instance that doesn't have its own, including b.">0.1 0.02</button>
+      <button type="button" data-why="The first line only gave a its own attribute; the class attribute was then changed to 0.04.">0.1 0.1</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>0.1 0.04</strong>. <code>a</code> finds its own attribute first. <code>b</code> has none, so it finds the class's, which is now 0.04.</p></div>
+  </div>
+
+  <p>This lookup rule has a famous trap. A mutable class attribute is shared by every instance, so changing it in place changes it for all of them:</p>
+
+  <div class="problem" data-id="obj-p2" data-answer="1|one">
+    <span class="qtag">Practice 2</span>
+    <p class="q">What does this print?</p>
+<pre><code>class Team:
+    members = []
+    def add(self, name):
+        self.members.append(name)
+
+t1, t2 = Team(), Team()
+t1.add("Ada")
+print(len(t2.members))</code></pre>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary><code>self.members</code> is only read, not assigned. Where is it found?</details>
+    <div class="solution" hidden><p><strong>1</strong>. <code>self.members</code> finds the one list on the class, and <code>append</code> changes it in place, so every team sees Ada. It's the mutable default argument trap from stage 1 in another form. The fix: create the list per instance, in <code>__init__</code>: <code>self.members = []</code>.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="inheritance">Inheritance and composition</h2>
+  <p>A class can be built from another one. A <span class="hl">subclass</span> inherits everything from its base class, and changes only what's different:</p>
+<pre><code>class CheckingAccount(Account):     # a CheckingAccount is an Account...
+    fee = 1                         # ...that charges a fee on withdrawals</code></pre>
+  <p>Step through "Inheritance". When <code>c.withdraw(10)</code> runs, Python doesn't find <code>withdraw</code> on <code>c</code> or on <code>CheckingAccount</code>, so it keeps going up to <code>Account</code>. Inside, <code>self.fee</code> is looked up starting from <code>c</code> again, and this time it's found on <code>CheckingAccount</code>: 1, not 0. Code in the base class automatically uses the subclass's values. When a subclass needs to extend a method rather than replace it, it calls the original with <code>super().withdraw(amount)</code>.</p>
+
+  <div class="problem" data-id="obj-p3" data-answer="39">
+    <span class="qtag">Practice 3</span>
+    <p class="q">What does the "Inheritance" program print?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The balance starts at 50. Which <code>fee</code> does <code>self.fee</code> find for a CheckingAccount?</details>
+    <div class="solution" hidden><p>50 − 10 − 1 = <strong>39</strong>. The method is written once, in <code>Account</code>, and the subclass changes its behavior just by supplying a different <code>fee</code>.</p></div>
+  </div>
+
+  <p>Inheritance means "is a": a checking account <em>is an</em> account, and should work anywhere an account does. When the relationship is "has a", use <span class="hl">composition</span> instead: give one object an attribute that holds another. A bank isn't an account; it <em>has</em> accounts. Step through "Objects in objects" to see a <code>Bank</code> holding a list of <code>Account</code>s. Many experienced designers favor composition, because inheritance ties a subclass to every detail of its base class.</p>
+
+  <div class="problem" data-id="obj-p4" data-answer="2|two">
+    <span class="qtag">Practice 4</span>
+    <p class="q">What does the "Objects in objects" program print?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Count the calls to <code>bank.open</code>. Does it matter that the second result isn't saved in a variable?</details>
+    <div class="solution" hidden><p><strong>2</strong>. Grace's account isn't assigned to any global name, but the bank's list still points at it, so it stays alive. In the tracer, it's the object only reachable through <code>bank</code>.</p></div>
+  </div>
+
+  <div class="mcq" data-id="obj-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">You're modeling a car with an engine. Which design fits?</p>
+    <div class="choices">
+      <button type="button" data-why="A car isn't a kind of engine. It would inherit methods like ignite_fuel that make no sense on a car.">class Car(Engine)</button>
+      <button type="button" data-why="An engine isn't a kind of car either.">class Engine(Car)</button>
+      <button type="button" data-why="Then nothing ties a car to its engine, and you can't swap engines.">Copy the engine's methods into Car</button>
+      <button type="button">Car has an attribute: self.engine = Engine()</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>A car <em>has</em> an engine: <strong>composition</strong>. It also lets you swap in an <code>ElectricMotor</code> later without changing what a <code>Car</code> is.</p></div>
+  </div>
+
+  <!-- 6 -->
+  <h2 id="special">Special methods</h2>
+  <p>Methods with double underscores, like <code>__init__</code>, are <span class="hl">special methods</span> that Python calls for you. Define them, and your objects work with Python's built-in syntax:</p>
+<pre><code>class Rational:
+    def __init__(self, n, d):
+        self.n, self.d = n, d
+
+    def __add__(self, other):                  # x + y
+        return Rational(self.n * other.d + other.n * self.d, self.d * other.d)
+
+    def __eq__(self, other):                   # x == y
+        return self.n * other.d == other.n * self.d
+
+    def __repr__(self):                        # how it prints
+        return f"Rational({self.n}, {self.d})"
+
+Rational(1, 2) + Rational(1, 3)                # Rational(5, 6)</code></pre>
+  <p>That's last lesson's fractions as a class. The constructor and selectors became <code>__init__</code> and attributes, and <code>add_rational</code> became <code>+</code>. Without <code>__eq__</code>, <code>==</code> only checks whether two names point at the <em>same object</em>, so two separate objects with equal fields compare unequal.</p>
+  <p>The special method <code>__iter__</code> makes an object work in a <code>for</code> loop. The easiest way to write it uses <code>yield</code>, which turns a function into a <span class="hl">generator</span>: it hands back one value at a time, pausing in between, instead of building a whole list.</p>
+
+  <div class="problem" data-id="obj-p5" data-answer="[321]|321">
+    <span class="qtag">Practice 5</span>
+    <p class="q">What does <code>list(Countdown(3))</code> return?</p>
+<pre><code>class Countdown:
+    def __init__(self, start):
+        self.start = start
+
+    def __iter__(self):
+        n = self.start
+        while n &gt; 0:
+            yield n
+            n -= 1</code></pre>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off" placeholder="e.g. [1, 2]"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Each <code>yield</code> produces one item. The loop stops when <code>n</code> reaches 0.</details>
+    <div class="solution" hidden><p><strong>[3, 2, 1]</strong>. <code>list()</code> asks the object for an iterator, then pulls values until the generator finishes. Because values are produced on demand, a generator can even describe an endless sequence.</p></div>
+  </div>
+
+  <div class="mcq" data-id="obj-q4" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">A class <code>Point</code> has an <code>__init__</code> that sets <code>self.x</code> and <code>self.y</code>, and no other methods. What does <code>Point(1, 2) == Point(1, 2)</code> give?</p>
+    <div class="choices">
+      <button type="button">False</button>
+      <button type="button" data-why="Python doesn't compare fields unless you define __eq__ (or use @dataclass, which writes it for you).">True</button>
+      <button type="button" data-why="== always works; it falls back to checking identity.">An error</button>
+      <button type="button" data-why="== on objects returns a bool.">None</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>False</strong>: they're two different objects, and the default <code>==</code> checks identity. Add <code>__eq__</code>, or put <code>@dataclass</code> above the class, which generates <code>__init__</code>, <code>__eq__</code>, and <code>__repr__</code> for you.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>Java's Stack, 1996</h3>
+    <p>Java 1.0 shipped a <code>Stack</code> class built by inheriting from <code>Vector</code>, its growable array. That saved writing code, but a stack is not a kind of array. Because of the inheritance, every <code>Stack</code> also has all of <code>Vector</code>'s methods, so any code can insert into the middle of a stack or read item 7, breaking the one rule that makes it a stack: last in, first out. Java can never remove those methods without breaking old programs, so its documentation now steers people to a different interface, <code>Deque</code>, instead. A stack that <em>had</em> an array (composition) could have hidden it.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Objects bundle data (attributes) with behavior (methods), and can change state over time.</li>
+    <li>A class is a blueprint. Calling it creates an instance and runs <code>__init__</code>.</li>
+    <li><code>obj.method(x)</code> is <code>Class.method(obj, x)</code>. <code>self</code> is just the first parameter.</li>
+    <li>Lookup order: instance, then class, then base classes. Assignment writes to the instance. Don't put mutable values on the class.</li>
+    <li>Inherit for "is a", compose for "has a". When in doubt, compose.</li>
+    <li>Special methods hook objects into Python's syntax: <code>+</code>, <code>==</code>, printing, and <code>for</code>.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p><code>dataclass</code> writes the boring methods for you:</p>
+<pre><code>from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: float
+    y: float
+
+    def dist(self, other):
+        return ((self.x - other.x) ** 2 + (self.y - other.y) ** 2) ** 0.5
+
+p, q = Point(0, 0), Point(3, 4)
+print(p)               # Point(x=0, y=0)
+print(p.dist(q))       # 5.0
+print(p == Point(0, 0))   # True</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 4</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="objects">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Interpreters</strong>, the last lesson of the stage, where you'll see that a programming language is itself just a program.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.composingprograms.com/pages/25-object-oriented-programming.html" target="_blank" rel="noopener">Composing Programs 2.5: Object-oriented programming</a><span>The CS61A chapter on classes, the <code>Account</code> example, attribute lookup, and inheritance.</span></li>
+      <li><a href="https://www.composingprograms.com/pages/26-implementing-classes-and-objects.html" target="_blank" rel="noopener">Composing Programs 2.6: Implementing classes and objects</a><span>Builds a working object system out of dictionaries and functions, to show there's no magic underneath.</span></li>
+      <li><a href="https://docs.python.org/3/tutorial/classes.html" target="_blank" rel="noopener">The Python Tutorial: Classes</a><span>Scopes, class and instance variables (including the shared-list trap), inheritance, iterators, and generators.</span></li>
+      <li><a href="https://docs.python.org/3/reference/datamodel.html" target="_blank" rel="noopener">Python docs: Data model</a><span>The full list of special methods and what calls each one.</span></li>
+      <li><a href="https://docs.python.org/3/library/dataclasses.html" target="_blank" rel="noopener">Python docs: dataclasses</a><span>Generated <code>__init__</code>, <code>__eq__</code>, <code>__repr__</code>, ordering, and frozen (immutable) classes.</span></li>
+      <li><a href="https://web.mit.edu/6.102/www/sp25/" target="_blank" rel="noopener">MIT 6.102: Software Construction</a><span>Abstract data types, representation invariants, and interfaces, in TypeScript. Where stage 9 goes deeper.</span></li>
+      <li><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Stack.html" target="_blank" rel="noopener">Java docs: Stack</a><span>The class that extends Vector, with the note recommending Deque instead.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script src="../assets/tracer.js"></script>
+<script>
+  // Recorded by running each program under sys.settrace (Python 3.14).
+  const TRACES = {"Two accounts": {"code": "class Account:\n    def __init__(self, owner):\n        self.owner = owner\n        self.balance = 0\n\n    def deposit(self, amount):\n        self.balance = self.balance + amount\n        return self.balance\n\na = Account(\"Ada\")\nb = Account(\"Grace\")\na.deposit(100)\nb.deposit(30)\na.deposit(5)\nprint(a.balance, b.balance)", "steps": [{"line": 1, "frames": [{"fn": "global", "vars": []}], "out": "", "heap": {}}, {"line": 1, "frames": [{"fn": "global", "vars": []}, {"fn": "class Account", "vars": []}], "out": "", "heap": {}}, {"line": 2, "frames": [{"fn": "global", "vars": []}, {"fn": "class Account", "vars": []}], "out": "", "heap": {}}, {"line": 6, "frames": [{"fn": "global", "vars": []}, {"fn": "class Account", "vars": []}], "out": "", "heap": {}}, {"line": 6, "frames": [{"fn": "global", "vars": []}, {"fn": "class Account", "vars": [["deposit", "function deposit", null]]}], "out": "", "heap": {}, "ret": "None"}, {"line": 10, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}], "out": "", "heap": {}}, {"line": 3, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["owner", "'Ada'", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": []}}}, {"line": 4, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["owner", "'Ada'", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null]]}}}, {"line": 4, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["owner", "'Ada'", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "0", null]]}}, "ret": "None"}, {"line": 11, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "0", null]]}}}, {"line": 3, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.Account object at 0x00000222C5705590>", "Account #2"], ["owner", "'Grace'", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "0", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": []}}}, {"line": 4, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.Account object at 0x00000222C5705590>", "Account #2"], ["owner", "'Grace'", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "0", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null]]}}}, {"line": 4, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.Account object at 0x00000222C5705590>", "Account #2"], ["owner", "'Grace'", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "0", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}, "ret": "None"}, {"line": 12, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "0", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}}, {"line": 7, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}, {"fn": "Account.deposit()", "vars": [["self", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["amount", "100", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "0", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}}, {"line": 8, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}, {"fn": "Account.deposit()", "vars": [["self", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["amount", "100", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "100", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}}, {"line": 8, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}, {"fn": "Account.deposit()", "vars": [["self", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["amount", "100", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "100", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}, "ret": "100"}, {"line": 13, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "100", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}}, {"line": 7, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}, {"fn": "Account.deposit()", "vars": [["self", "<__main__.Account object at 0x00000222C5705590>", "Account #2"], ["amount", "30", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "100", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}}, {"line": 8, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}, {"fn": "Account.deposit()", "vars": [["self", "<__main__.Account object at 0x00000222C5705590>", "Account #2"], ["amount", "30", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "100", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "30", null]]}}}, {"line": 8, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}, {"fn": "Account.deposit()", "vars": [["self", "<__main__.Account object at 0x00000222C5705590>", "Account #2"], ["amount", "30", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "100", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "30", null]]}}, "ret": "30"}, {"line": 14, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "100", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "30", null]]}}}, {"line": 7, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}, {"fn": "Account.deposit()", "vars": [["self", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["amount", "5", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "100", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "30", null]]}}}, {"line": 8, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}, {"fn": "Account.deposit()", "vars": [["self", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["amount", "5", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "105", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "30", null]]}}}, {"line": 8, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}, {"fn": "Account.deposit()", "vars": [["self", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["amount", "5", null]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "105", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "30", null]]}}, "ret": "105"}, {"line": 15, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}], "out": "", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "105", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "30", null]]}}}, {"line": 0, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["a", "<__main__.Account object at 0x00000222C5645400>", "Account #1"], ["b", "<__main__.Account object at 0x00000222C5705590>", "Account #2"]]}], "out": "105 30\n", "heap": {"Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "105", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "30", null]]}}}]}, "Inheritance": {"code": "class Account:\n    fee = 0\n\n    def __init__(self, owner):\n        self.owner = owner\n        self.balance = 0\n\n    def withdraw(self, amount):\n        self.balance = self.balance - amount - self.fee\n        return self.balance\n\nclass CheckingAccount(Account):\n    fee = 1\n\nc = CheckingAccount(\"Linus\")\nc.balance = 50\nc.withdraw(10)\nprint(c.balance)", "steps": [{"line": 1, "frames": [{"fn": "global", "vars": []}], "out": "", "heap": {}}, {"line": 1, "frames": [{"fn": "global", "vars": []}, {"fn": "class Account", "vars": []}], "out": "", "heap": {}}, {"line": 2, "frames": [{"fn": "global", "vars": []}, {"fn": "class Account", "vars": []}], "out": "", "heap": {}}, {"line": 4, "frames": [{"fn": "global", "vars": []}, {"fn": "class Account", "vars": [["fee", "0", null]]}], "out": "", "heap": {}}, {"line": 8, "frames": [{"fn": "global", "vars": []}, {"fn": "class Account", "vars": [["fee", "0", null]]}], "out": "", "heap": {}}, {"line": 8, "frames": [{"fn": "global", "vars": []}, {"fn": "class Account", "vars": [["fee", "0", null], ["withdraw", "function withdraw", null]]}], "out": "", "heap": {}, "ret": "None"}, {"line": 12, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}], "out": "", "heap": {}}, {"line": 12, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}, {"fn": "class CheckingAccount", "vars": []}], "out": "", "heap": {}}, {"line": 13, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}, {"fn": "class CheckingAccount", "vars": []}], "out": "", "heap": {}}, {"line": 13, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}, {"fn": "class CheckingAccount", "vars": [["fee", "1", null]]}], "out": "", "heap": {}, "ret": "None"}, {"line": 15, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["CheckingAccount", "class CheckingAccount", null]]}], "out": "", "heap": {}}, {"line": 5, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["CheckingAccount", "class CheckingAccount", null]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"], ["owner", "'Linus'", null]]}], "out": "", "heap": {"CheckingAccount #1": {"type": "CheckingAccount", "kind": "map", "items": []}}}, {"line": 6, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["CheckingAccount", "class CheckingAccount", null]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"], ["owner", "'Linus'", null]]}], "out": "", "heap": {"CheckingAccount #1": {"type": "CheckingAccount", "kind": "map", "items": [["owner", "'Linus'", null]]}}}, {"line": 6, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["CheckingAccount", "class CheckingAccount", null]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"], ["owner", "'Linus'", null]]}], "out": "", "heap": {"CheckingAccount #1": {"type": "CheckingAccount", "kind": "map", "items": [["owner", "'Linus'", null], ["balance", "0", null]]}}, "ret": "None"}, {"line": 16, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["CheckingAccount", "class CheckingAccount", null], ["c", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"]]}], "out": "", "heap": {"CheckingAccount #1": {"type": "CheckingAccount", "kind": "map", "items": [["owner", "'Linus'", null], ["balance", "0", null]]}}}, {"line": 17, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["CheckingAccount", "class CheckingAccount", null], ["c", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"]]}], "out": "", "heap": {"CheckingAccount #1": {"type": "CheckingAccount", "kind": "map", "items": [["owner", "'Linus'", null], ["balance", "50", null]]}}}, {"line": 9, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["CheckingAccount", "class CheckingAccount", null], ["c", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"]]}, {"fn": "Account.withdraw()", "vars": [["self", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"], ["amount", "10", null]]}], "out": "", "heap": {"CheckingAccount #1": {"type": "CheckingAccount", "kind": "map", "items": [["owner", "'Linus'", null], ["balance", "50", null]]}}}, {"line": 10, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["CheckingAccount", "class CheckingAccount", null], ["c", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"]]}, {"fn": "Account.withdraw()", "vars": [["self", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"], ["amount", "10", null]]}], "out": "", "heap": {"CheckingAccount #1": {"type": "CheckingAccount", "kind": "map", "items": [["owner", "'Linus'", null], ["balance", "39", null]]}}}, {"line": 10, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["CheckingAccount", "class CheckingAccount", null], ["c", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"]]}, {"fn": "Account.withdraw()", "vars": [["self", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"], ["amount", "10", null]]}], "out": "", "heap": {"CheckingAccount #1": {"type": "CheckingAccount", "kind": "map", "items": [["owner", "'Linus'", null], ["balance", "39", null]]}}, "ret": "39"}, {"line": 18, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["CheckingAccount", "class CheckingAccount", null], ["c", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"]]}], "out": "", "heap": {"CheckingAccount #1": {"type": "CheckingAccount", "kind": "map", "items": [["owner", "'Linus'", null], ["balance", "39", null]]}}}, {"line": 0, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["CheckingAccount", "class CheckingAccount", null], ["c", "<__main__.CheckingAccount object at 0x00000222C5646F90>", "CheckingAccount #1"]]}], "out": "39\n", "heap": {"CheckingAccount #1": {"type": "CheckingAccount", "kind": "map", "items": [["owner", "'Linus'", null], ["balance", "39", null]]}}}]}, "Objects in objects": {"code": "class Account:\n    def __init__(self, owner):\n        self.owner = owner\n        self.balance = 0\n\nclass Bank:\n    def __init__(self):\n        self.accounts = []\n\n    def open(self, owner):\n        acct = Account(owner)\n        self.accounts.append(acct)\n        return acct\n\nbank = Bank()\nada = bank.open(\"Ada\")\nada.balance = 10\nbank.open(\"Grace\")\nprint(len(bank.accounts))", "steps": [{"line": 1, "frames": [{"fn": "global", "vars": []}], "out": "", "heap": {}}, {"line": 1, "frames": [{"fn": "global", "vars": []}, {"fn": "class Account", "vars": []}], "out": "", "heap": {}}, {"line": 2, "frames": [{"fn": "global", "vars": []}, {"fn": "class Account", "vars": []}], "out": "", "heap": {}}, {"line": 2, "frames": [{"fn": "global", "vars": []}, {"fn": "class Account", "vars": []}], "out": "", "heap": {}, "ret": "None"}, {"line": 6, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}], "out": "", "heap": {}}, {"line": 6, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}, {"fn": "class Bank", "vars": []}], "out": "", "heap": {}}, {"line": 7, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}, {"fn": "class Bank", "vars": []}], "out": "", "heap": {}}, {"line": 10, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}, {"fn": "class Bank", "vars": []}], "out": "", "heap": {}}, {"line": 10, "frames": [{"fn": "global", "vars": [["Account", "class Account", null]]}, {"fn": "class Bank", "vars": [["open", "function open", null]]}], "out": "", "heap": {}, "ret": "None"}, {"line": 15, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null]]}], "out": "", "heap": {}}, {"line": 8, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null]]}, {"fn": "Bank.__init__()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": []}}}, {"line": 8, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null]]}, {"fn": "Bank.__init__()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": []}}, "ret": "None"}, {"line": 16, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": []}}}, {"line": 11, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Ada'", null]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": []}}}, {"line": 3, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Ada'", null]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"], ["owner", "'Ada'", null]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": []}, "Account #1": {"type": "Account", "kind": "map", "items": []}}}, {"line": 4, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Ada'", null]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"], ["owner", "'Ada'", null]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": []}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null]]}}}, {"line": 4, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Ada'", null]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"], ["owner", "'Ada'", null]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": []}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "0", null]]}}, "ret": "None"}, {"line": 12, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Ada'", null], ["acct", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": []}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "0", null]]}}}, {"line": 13, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Ada'", null], ["acct", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "0", null]]}}}, {"line": 13, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Ada'", null], ["acct", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "0", null]]}}, "ret": "<__main__.Account object at 0x00000222C56456A0>"}, {"line": 17, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["ada", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "0", null]]}}}, {"line": 18, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["ada", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "10", null]]}}}, {"line": 11, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["ada", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Grace'", null]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "10", null]]}}}, {"line": 3, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["ada", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Grace'", null]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.Account object at 0x00000222C5705950>", "Account #2"], ["owner", "'Grace'", null]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "10", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": []}}}, {"line": 4, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["ada", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Grace'", null]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.Account object at 0x00000222C5705950>", "Account #2"], ["owner", "'Grace'", null]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "10", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null]]}}}, {"line": 4, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["ada", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Grace'", null]]}, {"fn": "Account.__init__()", "vars": [["self", "<__main__.Account object at 0x00000222C5705950>", "Account #2"], ["owner", "'Grace'", null]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "10", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}, "ret": "None"}, {"line": 12, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["ada", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Grace'", null], ["acct", "<__main__.Account object at 0x00000222C5705950>", "Account #2"]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "10", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}}, {"line": 13, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["ada", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Grace'", null], ["acct", "<__main__.Account object at 0x00000222C5705950>", "Account #2"]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>, <__main__.Account object at 0x00000222C5705950>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"], ["1", "<__main__.Account object at 0x00000222C5705950>", "Account #2"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "10", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}}, {"line": 13, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["ada", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}, {"fn": "Bank.open()", "vars": [["self", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["owner", "'Grace'", null], ["acct", "<__main__.Account object at 0x00000222C5705950>", "Account #2"]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>, <__main__.Account object at 0x00000222C5705950>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"], ["1", "<__main__.Account object at 0x00000222C5705950>", "Account #2"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "10", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}, "ret": "<__main__.Account object at 0x00000222C5705950>"}, {"line": 19, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["ada", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}], "out": "", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>, <__main__.Account object at 0x00000222C5705950>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"], ["1", "<__main__.Account object at 0x00000222C5705950>", "Account #2"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "10", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}}, {"line": 0, "frames": [{"fn": "global", "vars": [["Account", "class Account", null], ["Bank", "class Bank", null], ["bank", "<__main__.Bank object at 0x00000222C5645550>", "Bank #1"], ["ada", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"]]}], "out": "2\n", "heap": {"Bank #1": {"type": "Bank", "kind": "map", "items": [["accounts", "[<__main__.Account object at 0x00000222C56456A0>, <__main__.Account object at 0x00000222C5705950>]", "list #1"]]}, "list #1": {"type": "list", "kind": "seq", "items": [["0", "<__main__.Account object at 0x00000222C56456A0>", "Account #1"], ["1", "<__main__.Account object at 0x00000222C5705950>", "Account #2"]]}, "Account #1": {"type": "Account", "kind": "map", "items": [["owner", "'Ada'", null], ["balance", "10", null]]}, "Account #2": {"type": "Account", "kind": "map", "items": [["owner", "'Grace'", null], ["balance", "0", null]]}}}]}};
+  Tracer.mount(document.getElementById('tracer'), TRACES);
+</script>
+</body>
+</html>

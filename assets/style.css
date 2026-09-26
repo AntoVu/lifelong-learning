@@ -204,7 +204,7 @@ code, pre, kbd, .tr-code { font-variant-ligatures: none; }
 .tr-frame dd.changed { background: var(--hl); color: var(--hl-ink); }
 .tr-empty, .tr-ret { font: .85rem var(--sans); color: var(--ink-2); margin: 0; }
 .tr-ret { margin-top: .3rem; font-weight: 600; color: var(--ink); }
-.tr-state { position: relative; padding-right: 2.2rem; }
+.tr-state { position: relative; padding-right: 2.8rem; }
 .tr-arrows { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 .tr-arrows path { fill: none; stroke: var(--ink); stroke-width: 1.6; }
 .tr-arrows path.tr-head { fill: var(--ink); stroke: none; }
@@ -212,6 +212,13 @@ code, pre, kbd, .tr-code { font-variant-ligatures: none; }
 .tr-heapwrap { margin-top: .4rem; }
 .tr-heapwrap[hidden] { display: none; }
 .tr-heap { display: grid; gap: .6rem; justify-items: start; }
+.tr-obj.map { display: block; padding: .3rem .6rem .4rem; }
+.tr-obj.map .tr-type { display: block; padding: 0 0 .15rem; }
+.tr-obj.map dl { display: grid; grid-template-columns: auto auto; gap: .1rem .7rem; margin: 0; align-items: baseline; }
+.tr-obj.map dt { font: .82rem var(--mono); color: var(--ink-2); }
+.tr-obj.map dd { margin: 0; justify-self: start; border-radius: 3px; padding: 0 .25rem; }
+.tr-obj.map dd code { background: none; padding: 0; }
+.tr-obj.map dd.changed { background: var(--hl); color: var(--hl-ink); }
 .tr-obj { display: inline-flex; flex-wrap: wrap; align-items: stretch; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--panel); overflow: hidden; }
 .tr-type { font: 600 .72rem var(--sans); color: var(--ink-2); padding: .2rem .45rem; align-self: center; }
 .tr-item { display: grid; text-align: center; border-left: 1px solid var(--rule); padding: .1rem .5rem .25rem; }

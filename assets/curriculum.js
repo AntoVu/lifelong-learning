@@ -22,7 +22,7 @@ window.CURRICULUM = [
       { id: 'hof', title: 'Higher-order functions', href: 'lessons/06-higher-order-functions.html', minutes: 45 },
       { id: 'recursion', title: 'Recursion in depth', href: 'lessons/07-recursion.html', minutes: 45 },
       { id: 'data-abstraction', title: 'Sequences, dictionaries, and data abstraction', href: 'lessons/08-data-abstraction.html', minutes: 45 },
-      { id: 'objects', title: 'Objects and classes' },
+      { id: 'objects', title: 'Objects and classes', href: 'lessons/09-objects.html', minutes: 50 },
       { id: 'interpreters', title: 'Interpreters: programs that run programs' },
     ],
   },
