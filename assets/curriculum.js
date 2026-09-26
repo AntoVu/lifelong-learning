@@ -23,7 +23,7 @@ window.CURRICULUM = [
       { id: 'recursion', title: 'Recursion in depth', href: 'lessons/07-recursion.html', minutes: 45 },
       { id: 'data-abstraction', title: 'Sequences, dictionaries, and data abstraction', href: 'lessons/08-data-abstraction.html', minutes: 45 },
       { id: 'objects', title: 'Objects and classes', href: 'lessons/09-objects.html', minutes: 50 },
-      { id: 'interpreters', title: 'Interpreters: programs that run programs' },
+      { id: 'interpreters', title: 'Interpreters: programs that run programs', href: 'lessons/10-interpreters.html', minutes: 45 },
     ],
   },
   { title: 'Data structures and algorithms', summary: 'Arrays to graphs, sorting to shortest paths, and how to reason about cost with Big-O.', sources: ['MIT 6.006', 'Princeton COS 226', 'Stanford CS161'] },

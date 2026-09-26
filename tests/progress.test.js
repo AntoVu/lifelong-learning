@@ -56,3 +56,11 @@ test('stage-1 achievement needs every stage 1 lesson finished', () => {
   P.completeLesson(s, 'functions', false, '2026-09-23');
   assert.deepEqual(P.checkAchievements(s, '2026-09-23'), ['stage-1']);
 });
+
+test('stage-2 achievement needs every stage 2 lesson finished', () => {
+  const s = P.fresh();
+  ['hof', 'recursion', 'data-abstraction', 'objects'].forEach(id => P.completeLesson(s, id, false, '2026-09-26'));
+  assert.ok(!P.checkAchievements(s, '2026-09-26').includes('stage-2'));
+  P.completeLesson(s, 'interpreters', false, '2026-09-26');
+  assert.ok(P.checkAchievements(s, '2026-09-26').includes('stage-2'));
+});

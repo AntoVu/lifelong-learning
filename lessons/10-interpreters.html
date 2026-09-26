@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interpreters: programs that run programs | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .calc-in { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .calc-in input { flex: 1 1 14rem; font: 1.05rem var(--mono); padding: .5rem .7rem; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); }
+  .presets { margin: .6rem 0 1rem; }
+  .presets button { font-family: var(--mono); font-weight: 400; }
+  .phase { margin: .9rem 0 0; }
+  .phase h4 { font: 600 .85rem var(--sans); color: var(--ink-2); margin: 0 0 .35rem; }
+  .tokens { display: flex; flex-wrap: wrap; gap: .25rem; }
+  .tok { font: .95rem var(--mono); padding: .1rem .45rem; border: 1.5px solid var(--ink); border-radius: 5px; background: var(--paper); }
+  .tok.paren { color: var(--ink-2); border-color: var(--rule); }
+  .ast-wrap { overflow-x: auto; background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; }
+  #ast { display: block; margin: 0 auto; max-width: none; }
+  #ast line { stroke: var(--ink); stroke-width: 1.5; }
+  #ast rect { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+  #ast .op rect { fill: var(--code-bg); }
+  #ast .now rect { fill: var(--hl); stroke-width: 2.5; }
+  #ast text { font: 600 14px var(--mono); text-anchor: middle; dominant-baseline: central; }
+  #ast .now text { fill: #1b2a41; }
+  #ast .val { font: 600 12px var(--mono); fill: var(--ink); }
+  #ast .valbox { fill: var(--hl); stroke: var(--ink); stroke-width: 1; }
+  .evlog { font: .95rem var(--mono); margin: .5rem 0 0; min-height: 1.4em; }
+  .calc-err { color: #a33a1f; font: .95rem var(--sans); }
+  @media (prefers-color-scheme: dark) { .calc-err { color: #f2a48e; } }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 2: Programming with abstraction, lesson 5 of 5</div>
+    <h1>Interpreters: programs that run programs</h1>
+    <p class="lede">Every lesson so far has used Python. But what <em>is</em> Python? Under the hood it's a program that reads your text and carries it out. In this lesson you'll build a tiny one yourself, in about 40 lines, and see that a programming language is just another abstraction.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="calc-title">
+    <h2 id="calc-title" style="margin-top:0;font-size:1.25rem">A calculator language, step by step</h2>
+    <div class="try">Type an expression, or pick one. Watch it get split into tokens, parsed into a tree, and evaluated from the leaves up.</div>
+    <form class="calc-in" id="calc-form"><input id="calc-text" aria-label="Calculator expression" autocomplete="off" spellcheck="false" value="(+ 1 (* 2 3))"><button class="btn">Run</button></form>
+    <div class="seg presets" id="presets" role="group" aria-label="Examples"></div>
+    <div class="phase"><h4>1. Tokenize: split the text into pieces</h4><div class="tokens" id="tokens"></div></div>
+    <div class="phase"><h4>2. Parse: build a tree from the tokens</h4><div class="ast-wrap"><svg id="ast" role="img" aria-label="Expression tree"></svg></div></div>
+    <div class="phase"><h4>3. Evaluate: work out each part, from the leaves up</h4>
+      <p class="evlog" id="evlog" aria-live="polite"></p>
+      <div class="tr-controls">
+        <button class="btn quiet" type="button" id="ev-back">Back</button>
+        <button class="btn" type="button" id="ev-next">Next step</button>
+        <button class="btn quiet" type="button" id="ev-end">Show result</button>
+      </div>
+    </div>
+  </section>
+  <p>The language is a simplified version of Scheme, the language Berkeley's CS61A and MIT's classic SICP course use for exactly this purpose. Every operation goes first, inside parentheses: <code>(+ 1 2)</code> means 1 + 2, and <code>(* 2 3 4)</code> means 2 × 3 × 4. It looks odd, but it makes the structure of every expression explicit, which keeps the interpreter small.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Describe the stages of an interpreter: tokenize, parse, evaluate.</li>
+      <li>Draw the expression tree for a nested expression.</li>
+      <li>Explain why evaluation is naturally recursive.</li>
+      <li>Read and extend a working interpreter in Python.</li>
+      <li>Explain why <code>eval</code> on untrusted text is dangerous.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#what">A language is a program</a></li>
+      <li><a href="#reading">Reading: tokens and trees</a></li>
+      <li><a href="#evaluating">Evaluating: eval and apply</a></li>
+      <li><a href="#repl">The read-eval-print loop</a></li>
+      <li><a href="#beyond">Where interpreters hide</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="what">A language is a program</h2>
+  <p>When you type <code>python script.py</code>, you're running a program called the <span class="hl">interpreter</span>. The standard one, CPython, is written in C. It reads your file as plain text, works out its structure, compiles it to the bytecode you saw in stage 1, and then runs that bytecode in a loop. Your program is its <em>data</em>.</p>
+  <p>That's the stored-program idea from stage 1 one level up: there, instructions were bytes in memory; here, a whole language is text handled by a program. Once you see that, languages stop being magic. Each one is a set of decisions, written down as an interpreter or compiler, that anyone can read and change.</p>
+
+  <!-- 2 -->
+  <h2 id="reading">Reading: tokens and trees</h2>
+  <p>An interpreter can't work with raw characters. The first stage, <span class="hl">tokenizing</span> (or lexing), splits the text into meaningful pieces: numbers, names, operators, and parentheses. For this language it's one line of Python, because spaces and parentheses are the only separators:</p>
+<pre><code>def tokenize(text):
+    return text.replace("(", " ( ").replace(")", " ) ").split()
+
+tokenize("(* (+ 1 2) 4)")
+# ['(', '*', '(', '+', '1', '2', ')', '4', ')']</code></pre>
+
+  <div class="problem" data-id="interp-p1" data-answer="9|nine">
+    <span class="qtag">Practice 1</span>
+    <p class="q">How many tokens does <code>(* (+ 1 2) 4)</code> have?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Every parenthesis is its own token. Or type it into the calculator above and count.</details>
+    <div class="solution" hidden><p><strong>9</strong>: four parentheses, two operators, and three numbers. Spaces aren't tokens; they just separate them.</p></div>
+  </div>
+
+  <p>Tokens are still a flat list. The second stage, <span class="hl">parsing</span>, builds the nested structure they describe: an <span class="hl">expression tree</span> (or abstract syntax tree). Each pair of parentheses becomes a node whose children are its parts. The parser is recursive, because the structure is: an expression can contain expressions.</p>
+<pre><code>def parse(tokens):
+    token = tokens.pop(0)
+    if token == "(":
+        expr = []
+        while tokens[0] != ")":
+            expr.append(parse(tokens))    # each part is itself an expression
+        tokens.pop(0)                     # drop the ")"
+        return expr
+    try:
+        return int(token)
+    except ValueError:
+        return token                      # an operator, like "+"
+
+parse(tokenize("(+ 1 (* 2 3))"))          # ['+', 1, ['*', 2, 3]]</code></pre>
+  <p>Python itself does the same thing for its much bigger grammar, and lets you look at the result with the <code>ast</code> module. Notice how the tree, not the text, records that <code>*</code> happens before <code>+</code>:</p>
+<pre><code>&gt;&gt;&gt; import ast
+&gt;&gt;&gt; print(ast.dump(ast.parse("1 + 2 * 3", mode="eval"), indent=2))
+Expression(
+  body=BinOp(
+    left=Constant(value=1),
+    op=Add(),
+    right=BinOp(
+      left=Constant(value=2),
+      op=Mult(),
+      right=Constant(value=3))))</code></pre>
+
+  <div class="mcq" data-id="interp-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">In Python's tree for <code>1 + 2 * 3</code>, why is the <code>Add</code> node at the top?</p>
+    <div class="choices">
+      <button type="button" data-why="Position in the text doesn't decide it; 2 * 3 + 1 also has Add at the top.">Because + comes first in the text</button>
+      <button type="button">Because * binds tighter, so 2 * 3 has to be a complete subtree under the +</button>
+      <button type="button" data-why="Python follows the usual math rules: 1 + 2 * 3 is 7, not 9.">Because Python evaluates left to right, ignoring precedence</button>
+      <button type="button" data-why="The tree has nodes for both; the question is which contains which.">Because Python trees can only have one operator</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>The node at the top is the one computed <strong>last</strong>. Since <code>*</code> binds tighter, the parser makes <code>2 * 3</code> a subtree, and <code>+</code> combines 1 with its result. Precedence rules exist only in the parser; once the tree is built, there's no ambiguity left. Scheme skips precedence entirely by making you write the parentheses.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="evaluating">Evaluating: eval and apply</h2>
+  <p>With a tree in hand, evaluating is short, because the tree's shape tells you exactly what to do. There are two cases:</p>
+  <ul>
+    <li>A <strong>number</strong> evaluates to itself.</li>
+    <li>A <strong>call</strong>, like <code>(* 2 3)</code>: evaluate each operand (recursively, since operands can be calls too), then <em>apply</em> the operator to the results.</li>
+  </ul>
+<pre><code>import math, operator
+from functools import reduce
+
+def calc_eval(expr):
+    if isinstance(expr, int):                # a number means itself
+        return expr
+    op, *operands = expr                     # a call: (op operand ...)
+    args = [calc_eval(e) for e in operands]  # evaluate the parts first
+    return calc_apply(op, args)
+
+def calc_apply(op, args):
+    if op == "+":
+        return sum(args)
+    if op == "*":
+        return math.prod(args)
+    if op == "-":
+        return -args[0] if len(args) == 1 else args[0] - sum(args[1:])
+    if op == "/":
+        return reduce(operator.truediv, args)
+    raise TypeError(f"unknown operator: {op}")</code></pre>
+  <p>That's the whole interpreter: tokenize, parse, and these two functions. Step through the evaluation in the calculator above: values appear at the leaves first, then flow up to the root, exactly like the call tree in the recursion lesson. The pair of functions has a famous name. SICP calls it the <span class="hl">eval-apply cycle</span>: eval breaks expressions into parts, apply carries out operations, and they call each other until the answer is reached.</p>
+
+  <div class="problem" data-id="interp-p2" data-answer="5">
+    <span class="qtag">Practice 2</span>
+    <p class="q">What does <code>(- 10 2 3)</code> evaluate to?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>With more than one argument, <code>-</code> subtracts all the rest from the first.</details>
+    <div class="solution" hidden><p>10 − 2 − 3 = <strong>5</strong>. Letting operators take any number of arguments is one of Scheme's design decisions, and it lives entirely in <code>calc_apply</code>.</p></div>
+  </div>
+
+  <div class="problem" data-id="interp-p3" data-answer="5">
+    <span class="qtag">Practice 3</span>
+    <p class="q">What does <code>(+ 1 (* 2 (- 5 3)))</code> evaluate to?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Start at the innermost parentheses and work outward.</details>
+    <div class="solution" hidden><p>(− 5 3) = 2, then (* 2 2) = 4, then (+ 1 4) = <strong>5</strong>. Inside out, which is leaves up in the tree.</p></div>
+  </div>
+
+  <div class="problem" data-id="interp-p4" data-answer="1|one">
+    <span class="qtag">Practice 4</span>
+    <p class="q">What does <code>(*)</code>, a multiplication with no arguments, evaluate to?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Look at what <code>math.prod</code> must return for an empty list so that multiplying by it changes nothing.</details>
+    <div class="solution" hidden><p><strong>1</strong>, the empty product, just as <code>(+)</code> is 0, the empty sum. These are the values that leave any number unchanged, and they're what <code>math.prod([])</code> and <code>sum([])</code> return.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="repl">The read-eval-print loop</h2>
+  <p>Wrap the pieces in a loop and you have an interactive language:</p>
+<pre><code>while True:
+    text = input("calc&gt; ")
+    print(calc_eval(parse(tokenize(text))))</code></pre>
+  <p>Read, eval, print, loop: a <span class="hl">REPL</span>. Python's <code>&gt;&gt;&gt;</code> prompt is exactly this, with a much bigger <code>eval</code>. So is your browser's JavaScript console, and so are the shells you'll meet in stage 8.</p>
+  <p>To grow the calculator into a real language, you'd add two things you already understand from the inside. <strong>Names</strong>: <code>(define x 5)</code> needs somewhere to store <code>x</code>, which is a frame, like the ones on the tracer. <strong>Functions</strong>: <code>(lambda (n) (* n n))</code> needs a value that remembers its parameters, its body, and the frame it was defined in, which is a closure from lesson 1. CS61A's final project does exactly that, ending with an interpreter for most of Scheme.</p>
+
+  <div class="mcq" data-id="interp-q2" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">You add <code>(define x 5)</code> to the calculator. Which part of the interpreter has to change to make <code>(+ x 1)</code> work?</p>
+    <div class="choices">
+      <button type="button" data-why="x is already split into its own token; nothing changes there.">Only the tokenizer</button>
+      <button type="button" data-why="Parsing doesn't change; x already becomes the string 'x' in the tree.">Only the parser</button>
+      <button type="button">The evaluator: it needs an environment to store and look up names</button>
+      <button type="button" data-why="+ already works on numbers. The problem is that x isn't a number until it's looked up.">Only calc_apply</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>The evaluator.</strong> <code>calc_eval</code> gets a third case, "a name evaluates to its value in the environment", plus a special case for <code>define</code>, which must not evaluate <code>x</code> before storing it. Syntax and meaning are separate layers, another abstraction barrier.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="beyond">Where interpreters hide</h2>
+  <p>Once you know the shape, you'll find interpreters everywhere: SQL databases parse and evaluate queries (stage 7), spreadsheets parse formulas, regex engines interpret patterns (the Cloudflare story in lesson 2), and template engines, config languages, and build tools all read text and act on it. Writing a small one is often the cleanest solution to a problem.</p>
+  <p>The flip side: an interpreter does whatever its input says. Python's built-in <code>eval(text)</code> runs any Python expression, so passing it text from a user hands that user your whole program. <code>eval("__import__('os').system('rm -rf ~')")</code> is a valid expression. To read data like <code>"[1, 2]"</code> safely, use <code>ast.literal_eval</code>, which only accepts literals, or a format like JSON.</p>
+
+  <div class="mcq" data-id="interp-q3" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">A web form lets users type a math expression, and the server computes it with <code>eval(user_text)</code>. What's the problem?</p>
+    <div class="choices">
+      <button type="button">A user can type any Python code, and the server will run it</button>
+      <button type="button" data-why="Speed isn't the issue. Safety is.">eval is too slow for a web server</button>
+      <button type="button" data-why="eval handles operator precedence correctly; it's full Python.">eval gets operator precedence wrong</button>
+      <button type="button" data-why="It would compute the math just fine. That's what makes the danger easy to miss.">It can't compute math expressions</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Arbitrary code execution.</strong> Anything Python can do, the user can now do on your server. The safe design is a small interpreter like this lesson's, which only understands numbers and four operators, so there's nothing else to exploit.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>Log4Shell, 2021</h3>
+    <p>Log4j is a Java library that writes log messages, used in a huge share of the world's Java software. Few people knew it contained a small interpreter: when it logged a string, it looked for patterns like <code>${...}</code> and evaluated them. One kind, <code>${jndi:ldap://...}</code>, told it to fetch an object from a server on the internet and load it, which could run that server's code. Since programs routinely log text that users send them, an attacker only had to type that pattern into a chat message, a username, or a web request header. The bug, made public in December 2021, scored the maximum 10 out of 10 for severity, and in Minecraft: Java Edition, one of the affected programs, an attacker could trigger it just by typing into the game's chat. Teams around the world spent weeks finding every copy. The lesson: know when your data is being interpreted.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>An interpreter is a program whose input is another program. Python itself is one.</li>
+    <li>Interpreting has stages: tokenize (text to pieces), parse (pieces to a tree), evaluate (tree to a value).</li>
+    <li>Precedence and grouping are settled by the parser. The tree has no ambiguity.</li>
+    <li>Evaluation is recursive: evaluate the parts, then apply the operation. Eval and apply call each other.</li>
+    <li>Names need environments (frames); functions need closures. You already know both.</li>
+    <li>Never <code>eval</code> untrusted text. Interpret only what you mean to allow.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>Put the tokenizer, parser, and evaluator from this lesson in one file and add the REPL loop. Then extend it: add a <code>max</code> operator, or make <code>/</code> report a friendly error on division by zero.</p>
+<pre><code>calc&gt; (+ 1 (* 2 3))
+7
+calc&gt; (/ 8 2)
+4.0
+calc&gt; (- 5)
+-5</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 5</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="interpreters">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">That's the end of stage 2. You can now name patterns, structure recursive solutions, hide representations, model state with objects, and even build a language. Next comes stage 3, <strong>Data structures and algorithms</strong>, where you'll measure how fast all of this runs.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.composingprograms.com/pages/34-interpreters-for-languages-with-combination.html" target="_blank" rel="noopener">Composing Programs 3.4: Interpreters for languages with combination</a><span>CS61A's Calculator interpreter, which this lesson's is modeled on.</span></li>
+      <li><a href="https://cs61a.org/" target="_blank" rel="noopener">Berkeley CS61A</a><span>The Scheme interpreter project, the capstone of the course.</span></li>
+      <li><a href="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/6515/sicp.zip/full-text/book/book-Z-H-26.html" target="_blank" rel="noopener">SICP 4.1: The metacircular evaluator</a><span>The classic: a Scheme interpreter written in Scheme, built around eval and apply.</span></li>
+      <li><a href="https://norvig.com/lispy.html" target="_blank" rel="noopener">Peter Norvig: (How to Write a (Lisp) Interpreter (in Python))</a><span>A short, famous essay building a working Lisp in about 100 lines of Python. The natural next step.</span></li>
+      <li><a href="https://craftinginterpreters.com/" target="_blank" rel="noopener">Crafting Interpreters, by Robert Nystrom</a><span>A free book that builds a full language twice: a tree-walking interpreter, then a bytecode virtual machine like Python's.</span></li>
+      <li><a href="https://docs.python.org/3/library/ast.html" target="_blank" rel="noopener">Python docs: ast</a><span>Python's own parser output, plus <code>literal_eval</code> for safely reading data.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Log4Shell" target="_blank" rel="noopener">Log4Shell (Wikipedia)</a><span>How the vulnerability worked, how it was found, and the response.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Calculator interpreter: tokenize, parse into a tree, then replay evaluation from the leaves up.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const PRESETS = ['(+ 1 (* 2 3))', '(* (+ 1 2) 4)', '(- 10 2 3)', '(+ 1 (* 2 (- 5 3)))', '(/ 8 2)', '(*)'];
+    let tree = null, order = [], k = 0;
+
+    const tokenize = text => text.replace(/\(/g, ' ( ').replace(/\)/g, ' ) ').trim().split(/\s+/).filter(Boolean);
+    function parse(tokens) {
+      if (!tokens.length) throw 'Unexpected end of input: is a ")" missing?';
+      const t = tokens.shift();
+      if (t === '(') {
+        const kids = [];
+        while (tokens[0] !== ')') { if (!tokens.length) throw 'Missing ")"'; kids.push(parse(tokens)); }
+        tokens.shift();
+        if (!kids.length || typeof kids[0].v !== 'string') throw 'A call needs an operator first, like (+ 1 2)';
+        return { op: kids[0].v, kids: kids.slice(1) };
+      }
+      if (t === ')') throw 'Unexpected ")"';
+      if (/^-?\d+$/.test(t)) return { v: parseInt(t, 10) };
+      return { v: t };
+    }
+    // Numbers carry a float flag so division prints like Python (4.0, not 4).
+    const fmt = x => (x.f && Number.isInteger(x.n) ? x.n.toFixed(1) : String(x.n)).replace('-', '−');
+    function evaluate(node) {
+      if (!node.op) {
+        if (typeof node.v === 'string') throw `"${node.v}" isn't a number. Operators go first inside parentheses.`;
+        node.val = { n: node.v, f: false }; order.push(node); return node.val;
+      }
+      const args = node.kids.map(evaluate), ns = args.map(a => a.n), f = args.some(a => a.f);
+      let r;
+      if (node.op === '+') r = { n: ns.reduce((a, b) => a + b, 0), f };
+      else if (node.op === '*') r = { n: ns.reduce((a, b) => a * b, 1), f };
+      else if (node.op === '-') { if (!ns.length) throw '- needs at least one argument'; r = { n: ns.length === 1 ? -ns[0] : ns.slice(1).reduce((a, b) => a - b, ns[0]), f }; }
+      else if (node.op === '/') { if (!ns.length) throw '/ needs at least one argument'; if (ns.slice(1).includes(0)) throw 'ZeroDivisionError: division by zero'; r = { n: ns.slice(1).reduce((a, b) => a / b, ns[0]), f: true }; }
+      else throw `TypeError: unknown operator: ${node.op}`;
+      node.val = r; order.push(node); return r;
+    }
+
+    function run(text) {
+      const toks = tokenize(text);
+      $('tokens').innerHTML = toks.map(t => `<span class="tok${t === '(' || t === ')' ? ' paren' : ''}">${t.replace(/</g, '&lt;')}</span>`).join('') || '<span class="calc-err">Type an expression.</span>';
+      tree = null; order = [];
+      try {
+        const rest = toks.slice();
+        tree = parse(rest);
+        if (rest.length) throw `Extra input after the expression: ${rest.join(' ')}`;
+        evaluate(tree);
+        k = 0;
+      } catch (e) {
+        if (!tree || !order.length) { k = 0; }
+        $('evlog').innerHTML = `<span class="calc-err">${String(e).replace(/</g, '&lt;')}</span>`;
+        if (!tree) { $('ast').innerHTML = ''; $('ast').setAttribute('width', 0); $('ast').setAttribute('height', 0); setButtons(true); return; }
+        order = []; drawTree(); setButtons(true); return;
+      }
+      drawTree(); setButtons(false); describe();
+    }
+
+    function layout(node, depth, next) {
+      node.depth = depth;
+      if (!node.kids || !node.kids.length) { node.x = next.col++; return; }
+      node.kids.forEach(c => layout(c, depth + 1, next));
+      node.x = (node.kids[0].x + node.kids[node.kids.length - 1].x) / 2;
+    }
+    function drawTree() {
+      const next = { col: 0 }; layout(tree, 0, next);
+      const all = []; (function walk(n) { all.push(n); (n.kids || []).forEach(walk); })(tree);
+      const W = 72, H = 66, pad = 24;
+      const width = next.col * W + pad * 2 + 40, height = (Math.max(...all.map(n => n.depth)) + 1) * H + pad + 16;
+      const px = n => pad + n.x * W + W / 2, py = n => pad + n.depth * H + 14;
+      const shown = new Set(order.slice(0, k)), now = order[k - 1];
+      let html = '';
+      all.forEach(n => (n.kids || []).forEach(c => { html += `<line x1="${px(n)}" y1="${py(n) + 14}" x2="${px(c)}" y2="${py(c) - 14}"/>`; }));
+      all.forEach(n => {
+        const label = n.op !== undefined ? n.op : String(n.v);
+        const w = Math.max(34, label.length * 10 + 16);
+        html += `<g class="${n.op !== undefined ? 'op' : ''}${n === now ? ' now' : ''}"><rect x="${px(n) - w / 2}" y="${py(n) - 14}" width="${w}" height="28" rx="${n.op !== undefined ? 14 : 5}"/><text x="${px(n)}" y="${py(n)}">${label.replace(/</g, '&lt;')}</text></g>`;
+        if (shown.has(n) && n.op !== undefined) {
+          // The value sits just right of its node, clear of the edges below.
+          const v = '= ' + fmt(n.val), vw = v.length * 8 + 10, bx = px(n) + w / 2 + 4;
+          html += `<rect class="valbox" x="${bx}" y="${py(n) - 10}" width="${vw}" height="20" rx="4"/><text class="val" x="${bx + vw / 2}" y="${py(n)}">${v}</text>`;
+        }
+      });
+      const svg = $('ast');
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`); svg.setAttribute('width', width); svg.setAttribute('height', height);
+      svg.innerHTML = html;
+    }
+    function describe() {
+      const n = order[k - 1];
+      $('evlog').textContent = k === 0 ? 'Press Next step to evaluate, starting at the leaves.'
+        : n.op === undefined ? `${fmt(n.val)} is a number, so it evaluates to itself.`
+        : `Apply ${n.op} to ${n.kids.map(c => fmt(c.val)).join(', ') || 'nothing'}: ${fmt(n.val)}` + (k === order.length ? '. That’s the final result.' : '.');
+      $('ev-back').disabled = k === 0;
+      $('ev-next').disabled = $('ev-end').disabled = k === order.length;
+    }
+    function setButtons(off) { ['ev-back', 'ev-next', 'ev-end'].forEach(id => { $(id).disabled = off; }); }
+    const go = v => { k = Math.max(0, Math.min(order.length, v)); drawTree(); describe(); };
+
+    PRESETS.forEach(p => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = p;
+      b.onclick = () => { $('calc-text').value = p; run(p); };
+      $('presets').append(b);
+    });
+    $('calc-form').onsubmit = e => { e.preventDefault(); run($('calc-text').value); };
+    $('ev-back').onclick = () => go(k - 1);
+    $('ev-next').onclick = () => go(k + 1);
+    $('ev-end').onclick = () => go(order.length);
+    run($('calc-text').value);
+  })();
+</script>
+</body>
+</html>
