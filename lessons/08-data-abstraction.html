@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sequences, dictionaries, and data abstraction | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .bar-controls { display: grid; gap: .6rem; margin-bottom: 1rem; }
+  .bar-controls > div { display: flex; flex-wrap: wrap; gap: .4rem .8rem; align-items: center; }
+  .bar-controls .lbl { font: 600 .85rem var(--sans); color: var(--ink-2); min-width: 8.5rem; }
+  .bar-controls label { font: .9rem var(--sans); display: flex; gap: .4rem; align-items: center; }
+  .layers { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border: 1.5px solid var(--ink); border-radius: 8px; overflow: hidden; }
+  .layer { padding: .7rem .9rem; border-top: 1px dashed var(--pencil); background: var(--panel); }
+  .layer:first-child { border-top: 0; }
+  .layer h4 { font: 600 .8rem var(--sans); color: var(--ink-2); margin: 0 0 .35rem; }
+  .layer pre { margin: 0; padding: .6rem .8rem; font-size: .85rem; }
+  .layer.bad { background: #fbe9e4; }
+  .layer.bad h4 { color: #8a2c14; }
+  @media (prefers-color-scheme: dark) { .layer.bad { background: #3b231f; } .layer.bad h4 { color: #f2b8a8; } }
+  .result { font: 1rem var(--mono); margin: .9rem 0 0; padding: .6rem .8rem; border-left: 4px solid var(--hl); background: var(--paper); }
+  .result.err { border-left-color: #c0492b; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 2: Programming with abstraction, lesson 3 of 5</div>
+    <h1>Sequences, dictionaries, and data abstraction</h1>
+    <p class="lede">Functions hide <em>how a computation works</em>. This lesson does the same for data. You'll use Python's built-in collections, then build a data type of your own whose users never need to know what's inside, and see why that freedom matters.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="bar-title">
+    <h2 id="bar-title" style="margin-top:0;font-size:1.25rem">Swap the representation</h2>
+    <div class="try">A small library for fractions. Change how a fraction is stored underneath, and check whether the code on top still works. Then switch the top layer to code that cheats.</div>
+    <div class="bar-controls">
+      <div><span class="lbl">Stored as</span><div class="seg" id="rep" role="group" aria-label="Representation"></div><label><input type="checkbox" id="reduce"> Reduce to lowest terms</label></div>
+      <div><span class="lbl">Code using fractions</span><div class="seg" id="user" role="group" aria-label="User code"></div></div>
+    </div>
+    <div class="layers" id="layers"></div>
+    <p class="result" id="result" aria-live="polite"></p>
+  </section>
+  <p>Each dashed line between layers is an <span class="hl">abstraction barrier</span>. Code that only crosses a barrier through the official functions keeps working no matter what changes underneath. Most of this lesson builds up to that idea.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Index, slice, and loop over lists, tuples, strings, and ranges.</li>
+      <li>Choose between a list, a tuple, a set, and a dictionary.</li>
+      <li>Use dictionaries to count, group, and look things up.</li>
+      <li>Build a data type from constructors and selectors.</li>
+      <li>Explain abstraction barriers, and spot code that breaks one.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#sequences">Sequences</a></li>
+      <li><a href="#dicts">Dictionaries and sets</a></li>
+      <li><a href="#abstraction">Building a data type</a></li>
+      <li><a href="#barriers">Abstraction barriers</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="sequences">Sequences</h2>
+  <p>Lists, tuples, strings, and ranges are all <span class="hl">sequences</span>: ordered collections you can measure, index, and loop over. Learn the operations once and they work on all of them.</p>
+<pre><code>s = "abcdef"
+len(s)          # 6
+s[0], s[-1]     # 'a', 'f'        negative indexes count from the end
+s[1:4]          # 'bcd'           a slice: start included, stop excluded, like range
+s[::2]          # 'ace'           every second item
+"cd" in s       # True
+for ch in s: ...</code></pre>
+  <p>The differences are about change. A <strong>list</strong> is mutable: you can append, remove, and assign to items. A <strong>tuple</strong> is an immutable list, written with parentheses: <code>(3, 4)</code>. A <strong>string</strong> is an immutable sequence of characters. Use a tuple for a fixed group of values that belong together, like a coordinate, and a list for a collection that grows.</p>
+
+  <div class="problem" data-id="data-p1" data-answer="bcd|'bcd'|&quot;bcd&quot;">
+    <span class="qtag">Practice 1</span>
+    <p class="q">What is <code>"abcdef"[1:4]</code>?</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Indexes start at 0. The slice includes index 1 and stops before index 4.</details>
+    <div class="solution" hidden><p><strong>'bcd'</strong>: indexes 1, 2, and 3. The length of a slice is always stop − start, here 3.</p></div>
+  </div>
+
+  <div class="problem" data-id="data-p2" data-answer="desserts|'desserts'|&quot;desserts&quot;">
+    <span class="qtag">Practice 2</span>
+    <p class="q">What is <code>"stressed"[::-1]</code>?</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>A step of −1 walks the sequence backward.</details>
+    <div class="solution" hidden><p><strong>'desserts'</strong>. <code>[::-1]</code> is the standard Python way to reverse any sequence, and <code>s == s[::-1]</code> is the one-line palindrome check.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="dicts">Dictionaries and sets</h2>
+  <p>A <span class="hl">dictionary</span> maps <em>keys</em> to <em>values</em>. Instead of asking for item number 3, you ask for the item named <code>"alice"</code>:</p>
+<pre><code>ages = {"alice": 31, "bob": 27}
+ages["alice"]            # 31
+ages["carol"] = 45       # add or replace
+"bob" in ages            # True  (checks keys)
+ages.get("dave", 0)      # 0     (a default instead of a KeyError)
+for name, age in ages.items(): ...</code></pre>
+  <p>Dictionaries are fast. Looking up a key takes about the same time whether the dictionary has ten entries or ten million, because Python stores entries in a <span class="hl">hash table</span>: it turns each key into a number and uses that number to jump straight to the right slot. (Stage 3 shows how.) That trick only works if a key can't change after it's stored, so keys must be immutable: strings, numbers, and tuples work, lists don't. Since Python 3.7, dictionaries also keep keys in the order you inserted them.</p>
+  <p>A <span class="hl">set</span> is a dictionary with only keys: an unordered collection with no duplicates and the same fast <code>in</code> check. <code>set(words)</code> is the quickest way to remove duplicates.</p>
+  <p>The most common dictionary pattern is counting:</p>
+<pre><code>counts = {}
+for word in "the cat and the hat".split():
+    counts[word] = counts.get(word, 0) + 1</code></pre>
+
+  <div class="problem" data-id="data-p3" data-answer="2|two">
+    <span class="qtag">Practice 3</span>
+    <p class="q">After the counting loop above, what is <code>counts["the"]</code>?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The first time a word appears, <code>get</code> returns the default, 0.</details>
+    <div class="solution" hidden><p><strong>2</strong>. The full result is <code>{'the': 2, 'cat': 1, 'and': 1, 'hat': 1}</code>. This pattern is common enough that the standard library has a ready-made version: <code>collections.Counter("the cat and the hat".split())</code>.</p></div>
+  </div>
+
+  <div class="problem" data-id="data-p4" data-answer="4|four">
+    <span class="qtag">Practice 4</span>
+    <p class="q">What is <code>len(set("mississippi"))</code>?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>A string is a sequence of characters, and a set keeps one of each.</details>
+    <div class="solution" hidden><p><strong>4</strong>: m, i, s, and p. Eleven characters, four distinct.</p></div>
+  </div>
+
+  <div class="mcq" data-id="data-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">You want a dictionary from map coordinates to the name of what's there. Which works as a key?</p>
+    <div class="choices">
+      <button type="button" data-why="Lists are mutable, so Python refuses them as keys: TypeError: unhashable type: 'list'.">[3, 4]</button>
+      <button type="button" data-why="Dictionaries are mutable too, so they can't be keys.">{"x": 3, "y": 4}</button>
+      <button type="button">(3, 4)</button>
+      <button type="button" data-why="This works, but it's a string you'd have to parse back into numbers. A tuple is the clean way.">None of these; you'd have to use the string "3,4"</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>The tuple <strong>(3, 4)</strong>. It's immutable, so its hash can never change after it's stored. <code>grid[(3, 4)] = "tree"</code>, or just <code>grid[3, 4]</code>, since the parentheses are optional there.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="abstraction">Building a data type</h2>
+  <p>Python doesn't have a fraction type built in (well, it has one in the standard library, but pretend it doesn't). How would you make one? CS61A's answer starts with a decision to separate two kinds of code:</p>
+  <ul>
+    <li><strong>Code that uses fractions</strong> should think in terms of numerators and denominators.</li>
+    <li><strong>Code that implements fractions</strong> decides how they're stored.</li>
+  </ul>
+  <p>The two sides talk through a small set of functions. A <span class="hl">constructor</span> builds a value, and <span class="hl">selectors</span> take it apart:</p>
+<pre><code>def rational(n, d):      # constructor
+    return (n, d)
+
+def numer(x):            # selectors
+    return x[0]
+
+def denom(x):
+    return x[1]</code></pre>
+  <p>Everything else is written using only those three:</p>
+<pre><code>def add_rational(x, y):
+    nx, dx, ny, dy = numer(x), denom(x), numer(y), denom(y)
+    return rational(nx * dy + ny * dx, dx * dy)
+
+def mul_rational(x, y):
+    return rational(numer(x) * numer(y), denom(x) * denom(y))</code></pre>
+  <p>Now look at the top panel again. The middle layer, <code>add_rational</code> and friends, never mentions tuples. That's why you can switch the bottom layer to a dictionary, or even to a function, and the answer stays the same.</p>
+
+  <div class="problem" data-id="data-p5" data-answer="1|one">
+    <span class="qtag">Practice 5</span>
+    <p class="q">Suppose <code>rational</code> reduces fractions to lowest terms. What is <code>numer(mul_rational(rational(2, 3), rational(3, 4)))</code>?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>2/3 × 3/4 = 6/12 before reducing. Try it on the panel with "Reduce to lowest terms" ticked.</details>
+    <div class="solution" hidden><p>6/12 reduces to 1/2, so the numerator is <strong>1</strong>. Only the constructor had to change to add reducing; <code>mul_rational</code> didn't. One change in one place, which is the payoff of the barrier.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="barriers">Abstraction barriers</h2>
+  <figure class="figure">
+    <svg viewBox="0 0 600 260" role="img" aria-labelledby="ab-t" style="max-width:640px">
+      <title id="ab-t">Four layers. Programs that use fractions call add_rational and mul_rational. Those call rational, numer, and denom. Those are implemented with tuples, which Python implements. Each layer only talks to the one directly below.</title>
+      <g font-size="14">
+        <rect x="20" y="10" width="560" height="50" rx="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/>
+        <text x="36" y="32" class="glabel">Programs that use fractions</text><text x="36" y="50" class="gsmall">"add these two prices", "scale this recipe"</text>
+        <rect x="20" y="72" width="560" height="50" rx="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/>
+        <text x="36" y="94" class="glabel">Fractions as numbers</text><text x="36" y="112" class="gsmall mono">add_rational, mul_rational, print_rational</text>
+        <rect x="20" y="134" width="560" height="50" rx="6" fill="var(--hl)" stroke="var(--ink)" stroke-width="2"/>
+        <text x="36" y="156" class="glabel" fill="#1b2a41">Fractions as a numerator and a denominator</text><text x="36" y="174" class="gsmall mono" style="fill:#1b2a41">rational, numer, denom</text>
+        <rect x="20" y="196" width="560" height="50" rx="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/>
+        <text x="36" y="218" class="glabel">How they're stored</text><text x="36" y="236" class="gsmall">a tuple, a dict, a function, ... (and below that, Python itself)</text>
+      </g>
+      <g stroke="var(--ink)" stroke-width="2.5" stroke-dasharray="7 5">
+        <line x1="20" y1="66" x2="580" y2="66"/><line x1="20" y1="128" x2="580" y2="128"/><line x1="20" y1="190" x2="580" y2="190"/>
+      </g>
+    </svg>
+    <figcaption>Each dashed line is an abstraction barrier. Code in a layer should only use the layer directly below it.</figcaption>
+  </figure>
+  <p>The rule is simple to say: <strong>only cross a barrier through the official functions</strong>. A function like this one breaks it:</p>
+<pre><code>def print_rational(x):
+    print(x[0], "/", x[1])     # reaches past numer and denom into the tuple</code></pre>
+  <p>It works today, because fractions happen to be tuples. Switch the top panel to "Breaks the barrier", then change the storage to a dict. The code that cheated crashes, while everything that went through <code>numer</code> and <code>denom</code> keeps working. In a real codebase, that crash shows up months later, in code nobody remembers writing, when someone improves the representation.</p>
+
+  <div class="mcq" data-id="data-q2" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">Which line inside <code>add_rational</code> respects the abstraction barrier?</p>
+    <div class="choices">
+      <button type="button" data-why="This assumes fractions are tuples. It breaks the moment the representation changes.">return (x[0] * y[1] + y[0] * x[1], x[1] * y[1])</button>
+      <button type="button">return rational(numer(x) * denom(y) + numer(y) * denom(x), denom(x) * denom(y))</button>
+      <button type="button" data-why="Correct math, but the result is built as a raw tuple instead of with the constructor, so reducing (or any other storage) is skipped.">return (numer(x) * denom(y) + numer(y) * denom(x), denom(x) * denom(y))</button>
+      <button type="button" data-why="This reaches into a dict representation directly, which is the same mistake as x[0].">return rational(x["n"] * y["d"] + y["n"] * x["d"], x["d"] * y["d"])</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>The second one reads values only with <strong>selectors</strong> and builds the result only with the <strong>constructor</strong>. Option 3 is the subtle trap: it reads correctly but builds a tuple by hand, so it silently bypasses whatever the constructor does, like reducing.</p></div>
+  </div>
+
+  <div class="mcq" data-id="data-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">Fractions are switched from tuples to dicts like <code>{"n": 1, "d": 2}</code>. What does the barrier-breaking <code>print_rational</code> do now?</p>
+    <div class="choices">
+      <button type="button" data-why="Python doesn't convert between representations for you.">Prints 1 / 2 as before</button>
+      <button type="button" data-why="Indexing a dict looks up a key; it doesn't return the first item.">Prints n / d</button>
+      <button type="button" data-why="A dict is valid to pass around; the failure happens when the function indexes it.">Fails as soon as the fraction is created</button>
+      <button type="button">Crashes with KeyError: 0</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><code>x[0]</code> on a dict looks up the key <code>0</code>, which doesn't exist: <strong>KeyError: 0</strong>. With the function representation it would be <code>TypeError: 'function' object is not subscriptable</code>. Either way, the bug is in <code>print_rational</code>, not in the change that exposed it.</p></div>
+  </div>
+
+  <p>Abstraction barriers are how large programs stay changeable. Python itself is an example: in Python 3.6, CPython switched to a completely new dictionary layout that used 20 to 25% less memory, and no one's code had to change, because nobody's code could see the old layout. In practice, Python marks "don't touch" parts with a leading underscore (<code>_numer</code>) and offers tools like <code>dataclasses</code> and classes (next lesson) to bundle data with its official functions.</p>
+
+  <div class="mcq" data-id="data-q4" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">What's the main benefit of keeping all code behind the fraction functions?</p>
+    <div class="choices">
+      <button type="button">The storage can change without editing any of the code that uses fractions</button>
+      <button type="button" data-why="Selectors add a function call, if anything. The benefit isn't speed.">The code runs faster</button>
+      <button type="button" data-why="Python doesn't enforce the barrier at all. It's a discipline, not a lock.">Python prevents anyone from reading the tuple</button>
+      <button type="button" data-why="Code size is about the same. The benefit is about change.">The program uses less memory</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Freedom to change the representation.</strong> Every program changes over its life. Barriers decide how much of it has to change along with each decision.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>The year 2000 problem</h3>
+    <p>In the 1960s and 70s, memory was expensive, so programs stored years as two digits: <code>75</code> for 1975. That was a reasonable representation. The problem was that it leaked everywhere. Instead of asking a date for its year through one shared function, millions of programs read the two digits directly, did arithmetic on them, sorted by them, and printed them. As 2000 approached, "00" would sort before "99" and ages would come out negative, and there was no single place to fix it: every program that touched a date had to be found, read, and changed by hand. Governments and companies spent hundreds of billions of dollars on the fix, and it mostly worked, which is why little went wrong on January 1, 2000. The lesson engineers took: hide representations behind functions, even when the representation looks too simple to change.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Sequences share indexing, slicing (<code>[start:stop:step]</code>, stop excluded), <code>len</code>, <code>in</code>, and iteration.</li>
+    <li>Lists change; tuples and strings don't. Only immutable values can be dictionary keys.</li>
+    <li>Dictionaries map keys to values with fast lookup. Sets are fast collections of unique items.</li>
+    <li>A data type is a constructor plus selectors. Code that uses the type should go through them.</li>
+    <li>An abstraction barrier lets the representation change without touching the code above it.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>The standard library's version of this lesson's fractions:</p>
+<pre><code>from fractions import Fraction
+
+x = Fraction(1, 2) + Fraction(1, 3)
+print(x)                    # 5/6
+print(x.numerator)          # 5   (a selector)
+print(Fraction(6, 12))      # 1/2 (the constructor reduces)
+print(Fraction(1, 10) * 3 == Fraction(3, 10))   # True, unlike 0.1 * 3 == 0.3</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 3</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="data-abstraction">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Objects and classes</strong>, which bundle data and its functions into one value, and add something new: state that changes over time.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.composingprograms.com/pages/22-data-abstraction.html" target="_blank" rel="noopener">Composing Programs 2.2: Data abstraction</a><span>The rational numbers example and abstraction barriers, from the CS61A textbook.</span></li>
+      <li><a href="https://www.composingprograms.com/pages/23-sequences.html" target="_blank" rel="noopener">Composing Programs 2.3: Sequences</a><span>Lists, ranges, slicing, and sequence processing.</span></li>
+      <li><a href="https://docs.python.org/3/tutorial/datastructures.html" target="_blank" rel="noopener">The Python Tutorial: Data structures</a><span>Lists, tuples, sets, dictionaries, and comprehensions for each.</span></li>
+      <li><a href="https://docs.python.org/3/library/fractions.html" target="_blank" rel="noopener">Python docs: fractions</a><span>The real <code>Fraction</code> type, with the same constructor-and-selector design.</span></li>
+      <li><a href="https://docs.python.org/3/library/collections.html" target="_blank" rel="noopener">Python docs: collections</a><span><code>Counter</code>, <code>defaultdict</code>, and <code>namedtuple</code>: ready-made versions of common dictionary and tuple patterns.</span></li>
+      <li><a href="https://docs.python.org/3/whatsnew/3.6.html" target="_blank" rel="noopener">What's new in Python 3.6</a><span>Includes the compact dictionary change, made without breaking any user code.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Year_2000_problem" target="_blank" rel="noopener">Year 2000 problem (Wikipedia)</a><span>How two-digit years spread, what the fix cost, and what happened on the day.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Abstraction barrier demo: same user code over three representations of a fraction.
+  (function () {
+    const gcd = (a, b) => (b ? gcd(b, a % b) : Math.abs(a));
+    const REPS = {
+      tuple: {
+        code: r => `def rational(n, d):\n${r ? '    g = gcd(n, d)\n    return (n // g, d // g)' : '    return (n, d)'}\n\ndef numer(x): return x[0]\ndef denom(x): return x[1]`,
+        show: (n, d) => `(${n}, ${d})`, index: (n, d, i) => [n, d][i],
+      },
+      dict: {
+        code: r => `def rational(n, d):\n${r ? '    g = gcd(n, d)\n    return {"n": n // g, "d": d // g}' : '    return {"n": n, "d": d}'}\n\ndef numer(x): return x["n"]\ndef denom(x): return x["d"]`,
+        show: (n, d) => `{'n': ${n}, 'd': ${d}}`, index: (n, d, i) => { throw `KeyError: ${i}`; },
+      },
+      function: {
+        code: r => `def rational(n, d):\n${r ? '    g = gcd(n, d)\n    n, d = n // g, d // g\n' : ''}    def select(name):\n        return n if name == "n" else d\n    return select\n\ndef numer(x): return x("n")\ndef denom(x): return x("d")`,
+        show: () => `<function rational.<locals>.select>`, index: () => { throw `TypeError: 'function' object is not subscriptable`; },
+      },
+    };
+    const USERS = {
+      'Respects the barrier': 'def print_rational(x):\n    print(numer(x), "/", denom(x))',
+      'Breaks the barrier': 'def print_rational(x):\n    print(x[0], "/", x[1])     # assumes a tuple!',
+    };
+    let rep = 'tuple', user = 'Respects the barrier';
+    const $ = id => document.getElementById(id);
+    const seg = (host, keys, get, set) => keys.forEach(k => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = k; b.setAttribute('aria-pressed', k === get());
+      b.onclick = () => { set(k); [...host.children].forEach(c => c.setAttribute('aria-pressed', c === b)); render(); };
+      host.append(b);
+    });
+    seg($('rep'), Object.keys(REPS), () => rep, k => rep = k);
+    seg($('user'), Object.keys(USERS), () => user, k => user = k);
+    $('reduce').onchange = render;
+
+    function render() {
+      const r = $('reduce').checked, R = REPS[rep];
+      const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      // 1/2 + 1/3 = 5/6 and 2/3 * 3/4 = 6/12, reduced or not.
+      const make = (n, d) => { const g = r ? gcd(n, d) : 1; return [n / g, d / g]; };
+      const product = make(6, 12);
+      const bad = user === 'Breaks the barrier';
+      $('layers').innerHTML = `
+        <div class="layer${bad ? ' bad' : ''}"><h4>Code using fractions${bad ? ': reaches below the barrier' : ''}</h4><pre><code>${esc(USERS[user])}\n\nprint_rational(mul_rational(rational(2, 3), rational(3, 4)))</code></pre></div>
+        <div class="layer"><h4>Fractions as numbers (unchanged in every version)</h4><pre><code>def mul_rational(x, y):\n    return rational(numer(x) * numer(y), denom(x) * denom(y))</code></pre></div>
+        <div class="layer"><h4>How fractions are stored: as a ${rep}</h4><pre><code>${esc(R.code(r))}</code></pre></div>`;
+      const internal = R.show(...product);
+      let out, err = false;
+      if (!bad) out = `${product[0]} / ${product[1]}`;
+      else { try { out = `${R.index(...product, 0)} / ${R.index(...product, 1)}`; } catch (e) { out = e; err = true; } }
+      $('result').className = 'result' + (err ? ' err' : '');
+      $('result').textContent = `Stored value: ${internal}\nOutput: ${out}`;
+      $('result').style.whiteSpace = 'pre-wrap';
+    }
+    render();
+  })();
+</script>
+</body>
+</html>
