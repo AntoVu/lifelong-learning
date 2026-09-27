@@ -334,7 +334,7 @@ print(clean("  Hello World "))    # hello-world</code></pre>
       'map: double':   { kind: 'map',    f: x => x * 2,       py: 'x * 2' },
       'map: add 1':    { kind: 'map',    f: x => x + 1,       py: 'x + 1' },
       'reduce: sum':   { kind: 'reduce', f: xs => xs.reduce((a, b) => a + b, 0), py: 'sum' },
-      'reduce: max':   { kind: 'reduce', f: xs => xs.length ? Math.max(...xs) : 'error: empty', py: 'max' },
+      'reduce: max':   { kind: 'reduce', f: xs => xs.length ? Math.max(...xs) : 'ValueError: max() iterable argument is empty', py: 'max' },
     };
     let steps = ['filter: even', 'map: square'];
     const start = Array.from({ length: 10 }, (_, i) => i + 1);
