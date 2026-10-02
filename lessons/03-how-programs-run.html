@@ -455,6 +455,7 @@ run([0x53, 0x80, 0x3F, 0x75, 0x61, 0x00] + [0] * 9 + [1])  # Countdown: 3 2 1</c
       input.addEventListener('change', () => {
         const v = parseInt(input.value, 16);
         if (/^[0-9a-f]{1,2}$/i.test(input.value.trim()) && v >= 0) m.mem[i] = v;
+        else m.msg = `"${input.value}" isn't a hex byte (00 to FF), so address ${i} is unchanged.`;
         render();
       });
       $('mem').append(c); cells.push(c);
