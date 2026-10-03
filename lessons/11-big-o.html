@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Measuring cost: Big-O | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .race { display: grid; gap: .45rem; margin: 1rem 0 .4rem; }
+  .lane { display: grid; grid-template-columns: 6.5rem 1fr 9.5rem; gap: .7rem; align-items: center; font: .9rem var(--sans); }
+  .lane b { font: 700 .9rem var(--mono); white-space: nowrap; }
+  .track { height: 1.3rem; background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+  .fill { height: 100%; background: var(--hl); border-right: 2px solid var(--ink); transition: width .25s; }
+  .fill.slow { background: #e9a48d; }
+  .lane .t { font: .85rem var(--mono); text-align: right; }
+  .nrow { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; font: .95rem var(--sans); }
+  .nrow input { flex: 1 1 12rem; accent-color: var(--ink); }
+  .nrow output { font: 700 1.05rem var(--mono); min-width: 7rem; }
+  .racenote { font: .85rem var(--sans); color: var(--ink-2); margin: .3rem 0 0; }
+  @media (max-width: 600px) { .lane { grid-template-columns: 6.4rem 1fr; } .lane .t { grid-column: 2; text-align: left; } }
+  @media (prefers-color-scheme: dark) { .fill.slow { background: #b0634c; } }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 3: Data structures and algorithms, lesson 1 of 8</div>
+    <h1>Measuring cost: Big-O</h1>
+    <p class="lede">Stage 2 was about writing programs that are clear. Stage 3 asks a second question: how fast are they, and how does that change as the input grows? This lesson gives you the vocabulary every later lesson, and every technical interview, uses to answer it.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="race-title">
+    <h2 id="race-title" style="margin-top:0;font-size:1.25rem">The growth race</h2>
+    <div class="try">Slide n, the size of the input. Each bar is how many steps an algorithm of that kind takes, on a log scale, and the time at a billion steps per second.</div>
+    <div class="nrow"><label for="n-slider">Input size n</label><input type="range" id="n-slider" min="1" max="6" step="1" value="2"><output id="n-out" for="n-slider"></output></div>
+    <div class="race" id="race"></div>
+    <p class="racenote">Bar length is the number of digits in the step count, so each notch is 10 times more work. Red means more than a minute.</p>
+  </section>
+  <p>At n = 10, every algorithm is instant. At n = 1,000,000, one finishes in a nanosecond and another would outlast the universe. That difference comes from the <em>shape</em> of each algorithm, not from the speed of the computer, and Big-O is the way to describe that shape.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain why we count steps as a function of input size instead of timing programs.</li>
+      <li>Simplify a step count to Big-O by dropping constants and smaller terms.</li>
+      <li>Recognize the common classes: O(1), O(log n), O(n), O(n log n), O(n²), O(2ⁿ).</li>
+      <li>Work out the Big-O of loops, nested loops, and halving loops.</li>
+      <li>Spot accidentally quadratic Python code and fix it.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#counting">Count steps, not seconds</a></li>
+      <li><a href="#bigo">Big-O notation</a></li>
+      <li><a href="#classes">The common classes</a></li>
+      <li><a href="#analyzing">Reading the cost of code</a></li>
+      <li><a href="#binary">Halving: binary search</a></li>
+      <li><a href="#python">What Python operations cost</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="counting">Count steps, not seconds</h2>
+  <p>You could measure an algorithm with a stopwatch, but the result depends on the machine, the language, what else is running, and the particular input. What doesn't change is how the amount of work grows with the size of the input, which we call <strong>n</strong>: the length of a list, the number of users, the number of pixels.</p>
+  <p>So we count basic steps (an addition, a comparison, reading one item) as a function of n. Finding the largest of n numbers looks at each one once: about n steps. Comparing every pair of n numbers takes about n²/2 steps. Double n, and the first takes twice as long while the second takes four times as long. That ratio is what matters when your data grows from a test file to production.</p>
+
+  <!-- 2 -->
+  <h2 id="bigo">Big-O notation</h2>
+  <p>Exact counts get messy, like 3n² + 5n + 2. Big-O keeps only what dominates for large n, using two rules:</p>
+  <ul>
+    <li><strong>Drop lower-order terms.</strong> When n is a million, 3n² is 3 trillion and 5n is only 5 million. The n² term wins.</li>
+    <li><strong>Drop constant factors.</strong> 3n² and n² grow the same way; the 3 depends on the machine and the details anyway.</li>
+  </ul>
+  <p>So 3n² + 5n + 2 is <span class="hl">O(n²)</span>, read "order n squared". Formally, f(n) is O(g(n)) if there are constants c and n₀ such that f(n) ≤ c · g(n) for every n ≥ n₀. In words: past some point, f never grows faster than g times a constant. Big-O is an upper bound. When people say "this is O(n)", they usually also mean "and not better", which is strictly Θ(n) (theta), the tight bound. Algorithms courses distinguish the two; everyday conversation rarely does.</p>
+
+  <div class="problem" data-id="bigo-p1" data-answer="n^2|n²|n2|n**2|o(n^2)|o(n²)|o(n2)|o(n**2)">
+    <span class="qtag">Practice 1</span>
+    <p class="q">An algorithm takes 4n² + 100n + 7 steps. What is its Big-O? (Type something like <code>n^2</code>.)</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Keep the fastest-growing term and drop its constant.</details>
+    <div class="solution" hidden><p><strong>O(n²)</strong>. For small n, the 100n term is actually bigger (at n = 10: 400 vs 1,000). But past n = 25 the n² term takes over for good, and Big-O only cares about large n.</p></div>
+  </div>
+
+  <div class="mcq" data-id="bigo-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">Algorithm A takes 100n steps. Algorithm B takes n² steps. Which is faster for large inputs?</p>
+    <div class="choices">
+      <button type="button" data-why="B is faster only while n is under 100. Big inputs are what Big-O is about.">B, because its formula has no constant</button>
+      <button type="button">A, once n is larger than 100</button>
+      <button type="button" data-why="They cross at n = 100, and after that the gap keeps growing.">They're always the same speed</button>
+      <button type="button" data-why="You can compare them exactly from the formulas.">You can't tell without timing them</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>A, for n &gt; 100</strong>. At n = 1,000, A takes 100,000 steps and B takes 1,000,000. At n = 1,000,000, A is 10,000 times faster. Constants decide small cases; growth decides big ones. (That's also why real libraries sometimes switch to a "worse" algorithm for tiny inputs.)</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="classes">The common classes</h2>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Big-O</th><th>Name</th><th>Typical example</th><th>Double n, and the time...</th></tr></thead>
+    <tbody>
+      <tr><td>O(1)</td><td>constant</td><td>read <code>xs[i]</code>; look up a dict key</td><td>stays the same</td></tr>
+      <tr><td>O(log n)</td><td>logarithmic</td><td>binary search in a sorted list</td><td>goes up by one step</td></tr>
+      <tr><td>O(n)</td><td>linear</td><td>one loop over the input; <code>max(xs)</code></td><td>doubles</td></tr>
+      <tr><td>O(n log n)</td><td>linearithmic</td><td>good sorting (lesson 4)</td><td>slightly more than doubles</td></tr>
+      <tr><td>O(n²)</td><td>quadratic</td><td>compare every pair; nested loops</td><td>quadruples</td></tr>
+      <tr><td>O(2ⁿ)</td><td>exponential</td><td>naive <code>fib</code> (stage 2); try every subset</td><td>squares (adding 1 to n doubles it)</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>A useful rule of thumb: a modern computer does on the order of a billion simple steps per second. So at n = 1,000,000, O(n log n) takes milliseconds, O(n²) takes about 17 minutes, and O(2ⁿ) never finishes. Try it on the race above.</p>
+
+  <div class="problem" data-id="bigo-p2" data-answer="100|100s|100seconds">
+    <span class="qtag">Practice 2</span>
+    <p class="q">An O(n²) program takes 1 second on 1,000 items. Roughly how many seconds will it take on 10,000 items?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>n grew by 10 times. What happens to n²?</details>
+    <div class="solution" hidden><p>10 times the input means 10² = 100 times the work: about <strong>100 seconds</strong>. This is how you predict whether something will survive real data: time it on a small input, then scale by the growth rate.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="analyzing">Reading the cost of code</h2>
+  <p>You can usually read Big-O straight off the code's structure:</p>
+  <ul>
+    <li><strong>Steps in sequence add.</strong> A loop over n items, then another loop over n items, is n + n = O(n).</li>
+    <li><strong>Nested loops multiply.</strong> A loop over n items inside a loop over n items is n · n = O(n²).</li>
+    <li><strong>Function calls cost what the function costs.</strong> A loop that calls an O(n) function n times is O(n²), even though you only see one loop.</li>
+  </ul>
+<pre><code>def has_duplicate(xs):
+    for i in range(len(xs)):
+        for j in range(i):           # every earlier item
+            if xs[i] == xs[j]:
+                return True
+    return False</code></pre>
+
+  <div class="problem" data-id="bigo-p3" data-answer="45">
+    <span class="qtag">Practice 3</span>
+    <p class="q">For a list of 10 items with no duplicates, how many times does <code>has_duplicate</code> run the comparison <code>xs[i] == xs[j]</code>?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The inner loop runs 0 times, then 1, then 2, ..., up to 9.</details>
+    <div class="solution" hidden><p>0 + 1 + ... + 9 = <strong>45</strong>, which is n(n − 1)/2. That's about n²/2, so the function is O(n²), even though the inner loop is "only half" of a full one. Halving is a constant factor, and Big-O drops constants.</p></div>
+  </div>
+
+  <div class="mcq" data-id="bigo-q2" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">What's the Big-O of this function, for a list of n names?</p>
+<pre><code>def report(names):
+    for name in names:
+        print(name)
+    for name in names:
+        print(name.upper())</code></pre>
+    <div class="choices">
+      <button type="button" data-why="The loops run one after the other, not one inside the other. Sequences add.">O(n²)</button>
+      <button type="button" data-why="2n simplifies: Big-O drops the constant 2.">O(2n), which is different from O(n)</button>
+      <button type="button">O(n)</button>
+      <button type="button" data-why="It touches every name, so it grows with n.">O(1)</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>n + n = 2n steps, which is <strong>O(n)</strong>. Two passes over the data are still linear. Only nesting multiplies.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="binary">Halving: binary search</h2>
+  <p>How do you find a name in a sorted phone book of a million names? Not by reading from page one. Open the middle, see whether the name comes before or after, and throw away the half it can't be in. Repeat. Each step halves what's left:</p>
+<pre><code>def binary_search(xs, target):        # xs must be sorted
+    lo, hi = 0, len(xs) - 1
+    while lo &lt;= hi:
+        mid = (lo + hi) // 2
+        if xs[mid] == target:
+            return mid
+        elif xs[mid] &lt; target:
+            lo = mid + 1               # target is in the right half
+        else:
+            hi = mid - 1               # target is in the left half
+    return -1</code></pre>
+  <p>The number of times you can halve n before reaching 1 is log₂ n, so binary search is <span class="hl">O(log n)</span>. Logarithms grow absurdly slowly: log₂ of a thousand is about 10, and log₂ of a billion is about 30. Whenever an algorithm throws away a constant fraction of the problem at each step, expect a log n.</p>
+
+  <div class="problem" data-id="bigo-p4" data-answer="20">
+    <span class="qtag">Practice 4</span>
+    <p class="q">At most how many times does binary search look at an item (<code>xs[mid]</code>) in a sorted list of 1,000,000 items?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>2¹⁰ = 1,024, so 2²⁰ is about a million. How many halvings get you down to one item?</details>
+    <div class="solution" hidden><p><strong>20</strong>. 2²⁰ = 1,048,576, which is just over a million, so 20 looks always suffice. A linear scan could need a million. That's the difference between O(log n) and O(n).</p></div>
+  </div>
+
+  <div class="mcq" data-id="bigo-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">What's the Big-O of this loop?</p>
+<pre><code>steps = 0
+while n &gt; 1:
+    n = n // 2
+    steps += 1</code></pre>
+    <div class="choices">
+      <button type="button" data-why="It counts down by halving, not by one.">O(n)</button>
+      <button type="button" data-why="The loop runs more times as n grows, so it's not constant.">O(1)</button>
+      <button type="button" data-why="There's only one loop, and it shrinks n fast.">O(n²)</button>
+      <button type="button">O(log n)</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>O(log n)</strong>. Halving n until it reaches 1 takes about log₂ n rounds. In fact this loop computes ⌊log₂ n⌋.</p></div>
+  </div>
+
+  <!-- 6 -->
+  <h2 id="python">What Python operations cost</h2>
+  <p>Big-O hides inside innocent-looking lines. These are worth memorizing:</p>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Operation</th><th>Cost</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>xs[i]</code>, <code>xs.append(x)</code>, <code>xs.pop()</code></td><td>O(1)</td><td>A list is an array; the end is cheap to reach (lesson 2)</td></tr>
+      <tr><td><code>x in xs</code> for a list</td><td>O(n)</td><td>It checks items one by one</td></tr>
+      <tr><td><code>xs.insert(0, x)</code>, <code>xs.pop(0)</code></td><td>O(n)</td><td>Every other item has to shift over</td></tr>
+      <tr><td><code>x in s</code> for a set, <code>d[k]</code> for a dict</td><td>O(1) on average</td><td>Hash tables (lesson 3)</td></tr>
+      <tr><td><code>sorted(xs)</code></td><td>O(n log n)</td><td>Timsort (lesson 4)</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The classic trap is an O(n) operation inside a loop. This looks like one loop, but it's O(n²):</p>
+<pre><code>seen = []
+for x in items:
+    if x not in seen:       # O(n) scan of a list, every time
+        seen.append(x)</code></pre>
+  <p>Changing <code>seen = []</code> to <code>seen = set()</code> (and <code>append</code> to <code>add</code>) makes it O(n). On 100,000 items, checking a list takes around ten thousand times longer than checking a set.</p>
+
+  <div class="mcq" data-id="bigo-q4" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">You need to check, for each of n orders, whether its customer ID is in a list of n banned IDs. What's the best fix for speed?</p>
+    <div class="choices">
+      <button type="button">Convert the banned list to a set once, then check each order against the set</button>
+      <button type="button" data-why="Sorting each time costs n log n per order: even worse.">Sort the banned list inside the loop before each check</button>
+      <button type="button" data-why="Reversing changes nothing about the cost of scanning a list.">Loop over the banned list in reverse</button>
+      <button type="button" data-why="A faster computer helps by a constant factor; the growth stays quadratic.">Buy a faster server</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Build a set once</strong> (O(n)), then each check is O(1) on average: O(n) total instead of O(n²). Sorting once and using binary search would also work, at O(n log n).</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>GTA Online's six-minute load screen, 2021</h3>
+    <p>For years, players of GTA Online waited several minutes for the game to load. In 2021 a player who goes by t0st profiled it without the source code and found the CPU spending about four minutes on a 10-megabyte JSON file with some 63,000 entries. There were two accidentally quadratic steps. The parser called <code>sscanf</code> for each value, and <code>sscanf</code> measured the length of the entire remaining 10 MB string every time. Then, to avoid duplicates, each of the 63,000 items was checked against every item already stored, about two billion comparisons, where a hash table would have needed 63,000 lookups. A small patch cut t0st's load time from about six minutes to under two. Rockstar confirmed the bug, shipped a fix, and paid him a $10,000 bug bounty.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Measure how work grows with input size n, not seconds on one machine.</li>
+    <li>Big-O keeps the fastest-growing term and drops constants: 3n² + 5n is O(n²).</li>
+    <li>Sequences add, nesting multiplies, halving gives log n.</li>
+    <li>At a billion steps per second, n = 10⁶ is instant for O(n log n), minutes for O(n²), and impossible for O(2ⁿ).</li>
+    <li>Watch for O(n) operations inside loops: <code>in</code> on a list, <code>insert(0)</code>, <code>pop(0)</code>. Reach for sets and dicts.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>See the difference yourself:</p>
+<pre><code>import timeit
+
+items = list(range(100_000))
+as_list, as_set = items, set(items)
+
+print(timeit.timeit(lambda: 99_999 in as_list, number=100))   # scans the list
+print(timeit.timeit(lambda: 99_999 in as_set, number=100))    # one hash lookup</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 1</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="big-o">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Arrays, linked lists, stacks, and queues</strong>, where you'll see why some of those operations are cheap and others aren't.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/" target="_blank" rel="noopener">MIT 6.006: Introduction to Algorithms (OpenCourseWare)</a><span>Lecture 1 covers asymptotic analysis and the model of computation. The spine of this stage.</span></li>
+      <li><a href="https://algs4.cs.princeton.edu/home/" target="_blank" rel="noopener">Princeton: Algorithms, 4th edition (Sedgewick and Wayne)</a><span>The textbook site for COS 226, with Java code for every algorithm in this stage. Section 1.4 covers analysis.</span></li>
+      <li><a href="https://web.stanford.edu/class/cs161/" target="_blank" rel="noopener">Stanford CS161: Design and Analysis of Algorithms</a><span>A more mathematical treatment, including proofs of Big-O bounds.</span></li>
+      <li><a href="https://wiki.python.org/moin/TimeComplexity" target="_blank" rel="noopener">Python wiki: Time complexity</a><span>The cost of every list, set, dict, and deque operation in CPython.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Big_O_notation" target="_blank" rel="noopener">Big O notation (Wikipedia)</a><span>The formal definitions of O, Ω, and Θ, with the history of the notation.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Binary_search" target="_blank" rel="noopener">Binary search (Wikipedia)</a><span>Variants, history, and the famous overflow bug in <code>(lo + hi) / 2</code> in languages with fixed-size integers.</span></li>
+      <li><a href="https://nee.lv/2021/02/28/How-I-cut-GTA-Online-loading-times-by-70/" target="_blank" rel="noopener">How I cut GTA Online loading times by 70%</a><span>t0st's original write-up of finding the two quadratic loops.</span></li>
+      <li><a href="https://visualgo.net/en" target="_blank" rel="noopener">VisuAlgo</a><span>Animated versions of nearly every data structure and algorithm in this stage.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Growth race: steps for each complexity class at n = 10^k, using log10 so 2^n doesn't overflow.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const L2 = Math.log10(2);
+    const CLASSES = [
+      ['O(1)', n => 0],
+      ['O(log n)', n => Math.log10(Math.log2(n))],
+      ['O(n)', n => Math.log10(n)],
+      ['O(n log n)', n => Math.log10(n * Math.log2(n))],
+      ['O(n²)', n => 2 * Math.log10(n)],
+      ['O(2ⁿ)', n => n * L2],
+    ];
+    const SPEED = 9; // log10 of steps per second
+    const UNITS = [[31557600, 'years'], [86400, 'days'], [3600, 'hours'], [60, 'minutes'], [1, 'seconds'], [1e-3, 'ms'], [1e-6, 'µs'], [1e-9, 'ns']];
+    const AGE_OF_UNIVERSE = Math.log10(13.8e9 * 31557600);
+    function steps(lg) {
+      if (lg < 15) return Math.round(10 ** lg).toLocaleString('en-US');
+      return `about 10^${Math.floor(lg)}`;
+    }
+    function time(lg) {
+      const t = lg - SPEED;
+      if (t > AGE_OF_UNIVERSE) return 'outlasts the universe';
+      const s = 10 ** t;
+      const [u, name] = UNITS.find(([v]) => s >= v) || UNITS[UNITS.length - 1];
+      const v = s / u;
+      return `${v < 10 ? Number(v.toFixed(1)) : Math.round(v).toLocaleString('en-US')} ${name}`;
+    }
+    function render() {
+      const n = 10 ** +$('n-slider').value;
+      $('n-out').textContent = n.toLocaleString('en-US');
+      $('race').innerHTML = CLASSES.map(([name, f]) => {
+        const lg = Math.max(0, f(n));
+        const pct = Math.min(100, (lg + 1) / 17 * 100);
+        const slow = lg - SPEED > Math.log10(60);
+        return `<div class="lane"><b>${name}</b><div class="track" title="${steps(lg)} steps"><div class="fill${slow ? ' slow' : ''}" style="width:${pct}%"></div></div><span class="t">${time(lg)}</span></div>`;
+      }).join('');
+    }
+    $('n-slider').oninput = render;
+    render();
+  })();
+</script>
+</body>
+</html>
