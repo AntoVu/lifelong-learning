@@ -32,7 +32,7 @@ window.CURRICULUM = [
     sources: ['MIT 6.006', 'Princeton COS 226', 'Stanford CS161'],
     lessons: [
       { id: 'big-o', title: 'Measuring cost: Big-O', href: 'lessons/11-big-o.html', minutes: 40 },
-      { id: 'linear', title: 'Arrays, linked lists, stacks, and queues' },
+      { id: 'linear', title: 'Arrays, linked lists, stacks, and queues', href: 'lessons/12-linear-structures.html', minutes: 40 },
       { id: 'hashing', title: 'Hash tables' },
       { id: 'sorting', title: 'Sorting' },
       { id: 'trees', title: 'Trees, binary search trees, and heaps' },

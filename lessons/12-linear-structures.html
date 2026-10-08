@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arrays, linked lists, stacks, and queues | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .ops { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+  .ops button { font-size: .88rem; padding: .35em .8em; }
+  .ds { margin: 0 0 1rem; }
+  .ds h4 { font: 600 .9rem var(--sans); margin: 0 0 .4rem; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .ds h4 span { font-weight: 400; color: var(--ink-2); }
+  .cells { display: flex; flex-wrap: wrap; gap: 0; }
+  .cell { width: 2.6rem; border: 1.5px solid var(--ink); margin-left: -1.5px; text-align: center; padding: .15rem 0 .25rem; background: var(--panel); font: 600 .95rem var(--mono); }
+  .cell small { display: block; font: .62rem var(--mono); color: var(--pencil); }
+  .cell.empty { border-style: dashed; border-color: var(--pencil); background: transparent; color: transparent; }
+  .cell.empty small { color: var(--pencil); }
+  .hot { background: var(--hl) !important; color: var(--hl-ink) !important; }
+  .nodes { display: flex; flex-wrap: wrap; align-items: center; gap: .15rem; font: 600 .95rem var(--mono); }
+  .node { display: inline-flex; border: 1.5px solid var(--ink); border-radius: 6px; overflow: hidden; background: var(--panel); }
+  .node span { padding: .2rem .5rem; }
+  .node .nx { border-left: 1px solid var(--rule); color: var(--ink-2); font-size: .8rem; display: flex; align-items: center; }
+  .arrow { color: var(--ink-2); }
+  .tag { font: .8rem var(--sans); color: var(--ink-2); margin-right: .3rem; }
+  .verdict { font: .95rem var(--sans); margin: 0; padding: .6rem .8rem; border-left: 4px solid var(--hl); background: var(--paper); }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 3: Data structures and algorithms, lesson 2 of 8</div>
+    <h1>Arrays, linked lists, stacks, and queues</h1>
+    <p class="lede">The last lesson claimed some list operations are cheap and others expensive. Here's why. There are two basic ways to lay a sequence out in memory, and every operation's cost follows from which one you picked.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="ds-title">
+    <h2 id="ds-title" style="margin-top:0;font-size:1.25rem">Same operations, two layouts</h2>
+    <div class="try">Run an operation on both structures at once. Highlighted cells are the work each one had to do.</div>
+    <div class="ops" id="ops"></div>
+    <div class="ds"><h4>Array (like a Python list) <span id="arr-cap"></span></h4><div class="cells" id="arr"></div></div>
+    <div class="ds"><h4>Linked list <span>each node points to the next</span></h4><div class="nodes" id="ll"></div></div>
+    <p class="verdict" id="verdict" aria-live="polite"></p>
+  </section>
+  <p>Neither layout wins everything. Arrays are fast to read anywhere and slow to change at the front; linked lists are the reverse. Choosing a data structure means choosing which operations you need to be cheap.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain why reading <code>xs[i]</code> from an array takes constant time.</li>
+      <li>Explain how a dynamic array grows, and why appending is O(1) on average.</li>
+      <li>Build a linked list and give the cost of its operations.</li>
+      <li>Use a stack and a queue, and pick the right Python type for each.</li>
+      <li>Explain why arrays often beat linked lists in practice.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#arrays">Arrays</a></li>
+      <li><a href="#dynamic">Arrays that grow</a></li>
+      <li><a href="#linked">Linked lists</a></li>
+      <li><a href="#stacks">Stacks</a></li>
+      <li><a href="#queues">Queues</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="arrays">Arrays</h2>
+  <p>Memory, as stage 1 showed, is one long row of numbered bytes. An <span class="hl">array</span> stores its items side by side in one block of it. If every item takes the same number of bytes, the address of item <code>i</code> is simple arithmetic:</p>
+<pre><code>address of xs[i] = address of xs[0] + i × (size of one item)</code></pre>
+  <p>One multiplication and one addition, whether the array has ten items or ten million. That's why indexing is <span class="hl">O(1)</span>, and why it's called random access: any item costs the same. (A Python list stores 8-byte references to its objects, not the objects themselves, so every slot is the same size even when the items aren't.)</p>
+  <p>The price is paid when the order changes. To insert at the front, every item has to move one slot to the right to make room. Press "Add to front" above and count the highlighted cells: O(n).</p>
+
+  <div class="problem" data-id="lin-p1" data-answer="1040">
+    <span class="qtag">Practice 1</span>
+    <p class="q">An array of 8-byte items starts at address 1000. At what address is <code>xs[5]</code>?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Item 0 is at 1000. Each item after it is 8 bytes further along.</details>
+    <div class="solution" hidden><p>1000 + 5 × 8 = <strong>1040</strong>. This is also why indexes start at 0 in most languages: the index is the distance from the start.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="dynamic">Arrays that grow</h2>
+  <p>A raw array has a fixed size, since the memory right after it may belong to something else. A <span class="hl">dynamic array</span> (Python's <code>list</code>, Java's <code>ArrayList</code>, C++'s <code>vector</code>) hides that by reserving extra room, its <em>capacity</em>. Appending fills a spare slot: O(1). When it's full, it allocates a bigger block and copies everything over: O(n), but rarely.</p>
+  <p>The trick is to grow by a <em>multiple</em>, like doubling. Then each expensive copy is followed by as many cheap appends as there were items, so the cost averages out to a constant per append. That average over a sequence of operations is called <span class="hl">amortized</span> cost: append is amortized O(1). Watch the capacity in the panel above as you keep pressing "Add to end". (CPython grows lists by about an eighth each time rather than doubling; any constant factor gives the same O(1) average.)</p>
+
+  <div class="problem" data-id="lin-p2" data-answer="7|seven">
+    <span class="qtag">Practice 2</span>
+    <p class="q">An empty dynamic array starts with capacity 1 and doubles whenever it's full. How many item copies happen in total while appending 8 items?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>It resizes from 1 to 2, then 2 to 4, then 4 to 8. Each resize copies the items already there.</details>
+    <div class="solution" hidden><p>1 + 2 + 4 = <strong>7</strong> copies for 8 appends, less than one per append. In general, the copies for n appends add up to less than 2n, so the average stays constant however large the list gets.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="linked">Linked lists</h2>
+  <p>A <span class="hl">linked list</span> gives up the single block. Each item lives in its own small object, a <em>node</em>, that also holds a reference to the next node. The list itself only remembers the first one, the <em>head</em>:</p>
+<pre><code>class Node:
+    def __init__(self, value, next=None):
+        self.value = value
+        self.next = next
+
+head = Node(1, Node(2, Node(3)))   # 1 → 2 → 3
+
+head = Node(0, head)               # add to front: O(1), nothing moves</code></pre>
+  <p>Adding or removing at the front just changes a reference or two. But there's no arithmetic to find item <code>i</code>: you start at the head and follow <code>next</code> i times. Reading is O(n), and so is appending, unless the list also keeps a reference to its last node (a <em>tail</em>), which makes append O(1).</p>
+
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Operation</th><th>Array (dynamic)</th><th>Linked list (head only)</th></tr></thead>
+    <tbody>
+      <tr><td>Read item i</td><td>O(1)</td><td>O(n)</td></tr>
+      <tr><td>Add or remove at front</td><td>O(n)</td><td>O(1)</td></tr>
+      <tr><td>Add at end</td><td>amortized O(1)</td><td>O(n), or O(1) with a tail reference</td></tr>
+      <tr><td>Search for a value</td><td>O(n)</td><td>O(n)</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="problem" data-id="lin-p3" data-answer="4|four">
+    <span class="qtag">Practice 3</span>
+    <p class="q">Starting at the head, how many times must you follow a <code>next</code> reference to reach the item at index 4?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The head is index 0, and you're already there.</details>
+    <div class="solution" hidden><p><strong>4</strong>: 0 → 1 → 2 → 3 → 4. Reaching index i takes i steps, which is why indexing a linked list is O(n).</p></div>
+  </div>
+
+  <div class="mcq" data-id="lin-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">Which operation is O(n) for an array but O(1) for a linked list?</p>
+    <div class="choices">
+      <button type="button" data-why="That's the reverse: O(1) for arrays, O(n) for linked lists.">Reading the item at index i</button>
+      <button type="button" data-why="Both have to check items one by one.">Searching for a value</button>
+      <button type="button">Inserting a new first item</button>
+      <button type="button" data-why="A dynamic array appends in amortized O(1).">Appending to the end of a dynamic array</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Inserting at the front.</strong> The array shifts every item; the linked list makes one new node and points it at the old head.</p></div>
+  </div>
+
+  <p>On paper, linked lists look great for lots of inserting. In practice they're often slower than arrays even then, because of the caches from stage 1. An array's items sit next to each other, so reading one pulls its neighbors into the cache for free. A linked list's nodes are scattered across memory, and following each <code>next</code> can mean a fresh trip to RAM, hundreds of clock ticks. Big-O counts steps; it doesn't see that some steps are 100 times slower than others.</p>
+
+  <!-- 4 -->
+  <h2 id="stacks">Stacks</h2>
+  <p>A <span class="hl">stack</span> is a collection where you only touch the top: <em>push</em> adds an item, <em>pop</em> removes the most recently added one. Last in, first out (LIFO). You've already met the most important one, the call stack. A Python list is a perfect stack, because <code>append</code> and <code>pop()</code> both work at the cheap end:</p>
+<pre><code>stack = []
+stack.append("a")     # push
+stack.append("b")
+stack.pop()           # 'b'  (last in, first out)</code></pre>
+  <p>Stacks fit any problem where the most recent unfinished thing must be finished first: undo history, the browser's back button, evaluating nested expressions, and checking that brackets match. For brackets, push each opener; on each closer, pop and check it matches.</p>
+
+  <div class="problem" data-id="lin-p4" data-answer="3|three">
+    <span class="qtag">Practice 4</span>
+    <p class="q">Starting with an empty stack: push 1, push 2, pop, push 3, push 4, pop, pop. What does the last pop return?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Write the stack as a list after each step. The pops return 2, then 4, then...</details>
+    <div class="solution" hidden><p>[1] → [1, 2] → pop 2 → [1] → [1, 3] → [1, 3, 4] → pop 4 → pop <strong>3</strong>. Only 1 is left.</p></div>
+  </div>
+
+  <div class="mcq" data-id="lin-q2" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">Using the stack method for brackets, which string is balanced?</p>
+    <div class="choices">
+      <button type="button" data-why="The ) arrives while [ is on top of the stack. Mismatch.">([)]</button>
+      <button type="button">{[()]}</button>
+      <button type="button" data-why="It ends with ( still on the stack, unclosed.">(()</button>
+      <button type="button" data-why="The first ) arrives with nothing on the stack to pop.">)(</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>{[()]}</strong>: each closer matches the opener on top of the stack, and the stack is empty at the end. Code editors, compilers, and the interpreter from stage 2 all do this check.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="queues">Queues</h2>
+  <p>A <span class="hl">queue</span> is first in, first out (FIFO): you add at the back and remove from the front, like a line at a store. Queues show up wherever work must be handled in arrival order: print jobs, web requests waiting for a server, messages between programs, and breadth-first search in lesson 6.</p>
+  <p>Don't use a list for this. <code>list.pop(0)</code> removes from the front, which shifts every other item: O(n). Python's <code>collections.deque</code> ("deck", a double-ended queue) adds and removes at both ends in O(1):</p>
+<pre><code>from collections import deque
+
+q = deque()
+q.append("first")     # join the back
+q.append("second")
+q.popleft()           # 'first' (first in, first out)</code></pre>
+
+  <div class="problem" data-id="lin-p5" data-answer="b|'b'|&quot;b&quot;">
+    <span class="qtag">Practice 5</span>
+    <p class="q">Starting with an empty queue: add a, add b, add c, remove, add d, remove. What does the last remove return?</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Removals come from the front, in the order things were added.</details>
+    <div class="solution" hidden><p>The first remove returns a, the second returns <strong>b</strong>. The queue still holds c and d. A stack doing the same steps would have returned c, then d.</p></div>
+  </div>
+
+  <div class="mcq" data-id="lin-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">A server keeps waiting requests in a Python list, adds new ones with <code>append</code>, and takes the oldest with <code>pop(0)</code>. With 100,000 waiting, it gets slow. Why?</p>
+    <div class="choices">
+      <button type="button" data-why="append is amortized O(1). The problem is at the other end.">append gets slower as the list grows</button>
+      <button type="button" data-why="Python lists can hold billions of items.">Python lists have a size limit</button>
+      <button type="button" data-why="That's a stack, which would serve the newest request first, which is unfair to everyone waiting.">It should pop from the end instead</button>
+      <button type="button">pop(0) shifts every remaining item; a deque's popleft doesn't</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>Each <strong>pop(0)</strong> moves all the other items one slot left: 100,000 moves per request. <code>deque.popleft()</code> is O(1). The fix is one import and two renamed method calls.</p></div>
+  </div>
+
+  <h2>When the textbook answer is wrong</h2>
+  <div class="story">
+    <h3>Stroustrup's vector vs. list experiment</h3>
+    <p>Bjarne Stroustrup, who created C++, likes to pose a puzzle he got from Jon Bentley: insert random numbers into a sorted sequence, keeping it sorted, then remove items from random positions. Which is faster, an array (C++'s <code>vector</code>) or a linked list? The textbook says linked list, because inserting into an array shifts items. His measurements showed the array winning by a wide margin, and by more as n grew. Both structures first have to <em>find</em> the position by walking from the start, and walking an array runs at full cache speed while walking a list chases pointers all over memory. Stroustrup's own conclusion wasn't "never use linked lists" but "measure, and remember the machine": Big-O tells you how cost grows, not what each step costs.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Arrays store items side by side: O(1) indexing by arithmetic, O(n) inserting at the front.</li>
+    <li>Dynamic arrays grow by a constant factor, so append is amortized O(1).</li>
+    <li>Linked lists chain nodes: O(1) at the head, O(n) to reach item i, and poor cache behavior.</li>
+    <li>Stack (LIFO): use a list's <code>append</code> and <code>pop()</code>. Queue (FIFO): use <code>collections.deque</code>.</li>
+    <li>Never <code>pop(0)</code> or <code>insert(0, x)</code> in a loop over a big list.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>A bracket checker with a stack:</p>
+<pre><code>def balanced(text):
+    pairs = {")": "(", "]": "[", "}": "{"}
+    stack = []
+    for ch in text:
+        if ch in "([{":
+            stack.append(ch)
+        elif ch in pairs:
+            if not stack or stack.pop() != pairs[ch]:
+                return False
+    return not stack
+
+print(balanced("{[()]}"), balanced("([)]"))    # True False</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 2</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="linear">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Hash tables</strong>, the structure behind Python's dict and set, and how they look things up in O(1).</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/" target="_blank" rel="noopener">MIT 6.006: Introduction to Algorithms</a><span>Lecture 2 covers sequences: static arrays, linked lists, and dynamic arrays with amortized analysis.</span></li>
+      <li><a href="https://algs4.cs.princeton.edu/13stacks/" target="_blank" rel="noopener">Princeton Algorithms 1.3: Bags, queues, and stacks</a><span>Array and linked-list implementations of each, with resizing arrays.</span></li>
+      <li><a href="https://www.composingprograms.com/pages/29-recursive-objects.html" target="_blank" rel="noopener">Composing Programs 2.9: Recursive objects</a><span>CS61A's linked list class, built recursively.</span></li>
+      <li><a href="https://docs.python.org/3/library/collections.html#collections.deque" target="_blank" rel="noopener">Python docs: collections.deque</a><span>The O(1) double-ended queue, with a bounded-length option for keeping the last N items.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Dynamic_array" target="_blank" rel="noopener">Dynamic array (Wikipedia)</a><span>Growth factors, amortized analysis, and how different languages choose them.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Linked_list" target="_blank" rel="noopener">Linked list (Wikipedia)</a><span>Singly and doubly linked lists, sentinels, and the tradeoffs with arrays.</span></li>
+      <li><a href="https://isocpp.org/blog/2014/06/stroustrup-lists" target="_blank" rel="noopener">Stroustrup: Are lists evil?</a><span>Stroustrup's own short explanation of the vector vs. list experiment and what it does and doesn't show.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Array vs. linked list: run the same operation on both and count the work.
+  (function () {
+    const $ = id => document.getElementById(id);
+    let arr, cap, list, next, hotA = [], hotL = [];
+    function reset() { arr = [10, 20, 30, 40]; cap = 4; list = arr.slice(); next = 50; hotA = []; hotL = []; render('Pick an operation.'); }
+
+    const OPS = {
+      'Add to front': () => {
+        const v = next; next += 10;
+        let msg, aw;
+        if (arr.length === cap) { cap *= 2; aw = `Array: full, so it moved to a block of ${cap} slots (copying ${arr.length} items), then shifted everything right.`; }
+        else aw = `Array: shifted all ${arr.length} items one slot right to make room. O(n).`;
+        arr.unshift(v); list.unshift(v);
+        hotA = arr.map((_, i) => i); hotL = [0];
+        return `${aw} Linked list: made one node and pointed it at the old head. O(1).`;
+      },
+      'Add to end': () => {
+        const v = next; next += 10;
+        let aw;
+        if (arr.length === cap) { cap *= 2; hotA = arr.map((_, i) => i).concat(arr.length); aw = `Array: full! It moved to a block of ${cap} slots, copying all ${arr.length} items. That's rare, so appends average O(1).`; }
+        else { hotA = [arr.length]; aw = 'Array: dropped it into the next spare slot. O(1).'; }
+        arr.push(v); list.push(v);
+        hotL = list.map((_, i) => i);
+        return `${aw} Linked list (head only): walked all ${list.length - 1} nodes to find the last one. O(n).`;
+      },
+      'Read the middle item': () => {
+        const i = Math.floor(arr.length / 2);
+        hotA = [i]; hotL = list.slice(0, i + 1).map((_, k) => k);
+        return `Array: address arithmetic jumps straight to index ${i}. O(1). Linked list: followed next ${i} times from the head. O(n).`;
+      },
+      'Remove from front': () => {
+        if (!arr.length) { hotA = hotL = []; return 'Both are empty.'; }
+        arr.shift(); list.shift();
+        hotA = arr.map((_, i) => i); hotL = [];
+        return `Array: shifted the remaining ${arr.length} items one slot left. O(n). Linked list: pointed the head at the second node. O(1).`;
+      },
+    };
+    Object.keys(OPS).forEach(k => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn quiet'; b.textContent = k;
+      b.onclick = () => { if (arr.length >= 14 && k.startsWith('Add')) return render('That’s plenty of items. Remove some, or reset.'); render(OPS[k]()); };
+      $('ops').append(b);
+    });
+    const r = document.createElement('button');
+    r.type = 'button'; r.className = 'btn quiet'; r.textContent = 'Reset'; r.onclick = reset;
+    $('ops').append(r);
+
+    function render(msg) {
+      $('arr-cap').textContent = `${arr.length} items, capacity ${cap}`;
+      let html = '';
+      for (let i = 0; i < cap; i++) {
+        const has = i < arr.length;
+        html += `<div class="cell${has ? '' : ' empty'}${hotA.includes(i) ? ' hot' : ''}"><small>${i}</small>${has ? arr[i] : '·'}</div>`;
+      }
+      $('arr').innerHTML = html;
+      $('ll').innerHTML = '<span class="tag">head</span>' + list.map((v, i) =>
+        `<span class="node${hotL.includes(i) ? ' hot' : ''}"><span>${v}</span><span class="nx">${i === list.length - 1 ? 'None' : '•'}</span></span>${i < list.length - 1 ? '<span class="arrow">→</span>' : ''}`).join('');
+      $('verdict').textContent = msg;
+    }
+    reset();
+  })();
+</script>
+</body>
+</html>
