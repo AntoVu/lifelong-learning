@@ -294,6 +294,7 @@ print(balanced("{[()]}"), balanced("([)]"))    # True False</code></pre>
         return `${aw} Linked list (head only): walked all ${list.length - 1} nodes to find the last one. O(n).`;
       },
       'Read the middle item': () => {
+        if (!arr.length) { hotA = hotL = []; return 'Both are empty, so there’s no middle item to read.'; }
         const i = Math.floor(arr.length / 2);
         hotA = [i]; hotL = list.slice(0, i + 1).map((_, k) => k);
         return `Array: address arithmetic jumps straight to index ${i}. O(1). Linked list: followed next ${i} times from the head. O(n).`;
