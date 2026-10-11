@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sorting | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .sort-top { display: grid; gap: .5rem; margin-bottom: .8rem; }
+  .sort-top > div { display: flex; flex-wrap: wrap; gap: .4rem .8rem; align-items: center; }
+  .sort-top .lbl { font: 600 .85rem var(--sans); color: var(--ink-2); min-width: 4.5rem; }
+  .bars { display: flex; align-items: flex-end; gap: 2px; height: 180px; padding: .5rem; background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; }
+  .bar { flex: 1; background: var(--ink-2); border-radius: 2px 2px 0 0; min-width: 3px; }
+  .bar.cmp { background: var(--hl); outline: 2px solid var(--ink); }
+  .bar.write { background: #e08a6d; }
+  .sort-stats { display: flex; flex-wrap: wrap; gap: .3rem 1.4rem; font: .9rem var(--sans); margin: .7rem 0 .3rem; }
+  .sort-stats b { font-family: var(--mono); }
+  .sort-msg { font: .9rem var(--sans); color: var(--ink-2); margin: 0 0 .6rem; min-height: 1.3em; }
+  @media (prefers-color-scheme: dark) { .bar { background: var(--ink-2); } .bar.write { background: #c46a4f; } }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 3: Data structures and algorithms, lesson 4 of 8</div>
+    <h1>Sorting</h1>
+    <p class="lede">Sorting is the most studied problem in computer science, and for good reason: sorted data makes searching, removing duplicates, grouping, and merging easy. This lesson compares four ways to sort, and shows why the good ones can't beat O(n log n).</p>
+  </header>
+
+  <section class="panel" aria-labelledby="sort-title">
+    <h2 id="sort-title" style="margin-top:0;font-size:1.25rem">Four sorts, side by side</h2>
+    <div class="try">Pick an algorithm and an input, then press Play. Yellow bars are being compared; red bars are being written. Compare the counts.</div>
+    <div class="sort-top">
+      <div><span class="lbl">Algorithm</span><div class="seg" id="algo" role="group" aria-label="Algorithm"></div></div>
+      <div><span class="lbl">Input</span><div class="seg" id="input" role="group" aria-label="Input order"></div><div class="seg" id="size" role="group" aria-label="Number of items"></div></div>
+    </div>
+    <div class="bars" id="bars" aria-hidden="true"></div>
+    <div class="sort-stats" id="sort-stats"></div>
+    <p class="sort-msg" id="sort-msg" aria-live="polite"></p>
+    <div class="tr-controls">
+      <button class="btn" type="button" id="sort-play">Play</button>
+      <button class="btn quiet" type="button" id="sort-step">Step</button>
+      <button class="btn quiet" type="button" id="sort-end">Finish</button>
+      <button class="btn quiet" type="button" id="sort-new">New numbers</button>
+    </div>
+  </section>
+  <p>Try 32 random items with each algorithm and watch the comparison count. Selection and insertion sort need hundreds; merge sort and quicksort need far fewer. Then try "Already sorted" and watch insertion sort finish almost instantly and quicksort fall apart.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Describe selection sort and insertion sort, and when insertion sort is the right choice.</li>
+      <li>Explain merge sort and why it takes O(n log n) time.</li>
+      <li>Explain quicksort, its average case, and what causes its worst case.</li>
+      <li>Explain why no comparison sort can do better than O(n log n).</li>
+      <li>Use Python's <code>sorted</code> with keys, and explain what a stable sort guarantees.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#simple">The simple sorts</a></li>
+      <li><a href="#merge">Merge sort</a></li>
+      <li><a href="#quick">Quicksort</a></li>
+      <li><a href="#limit">The speed limit</a></li>
+      <li><a href="#python">Sorting in Python</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="simple">The simple sorts</h2>
+  <p><span class="hl">Selection sort</span> is how many people sort by hand: find the smallest item and put it first, then find the smallest of the rest and put it second, and so on. Finding each minimum scans everything left, so it always takes about n²/2 comparisons, even if the input was already sorted.</p>
+  <p><span class="hl">Insertion sort</span> is how people sort a hand of cards: take each new item and slide it left past the bigger ones until it's in place. On random input it's also O(n²). But on nearly sorted input each item only slides a little, so it approaches O(n). That makes it the best choice for small or nearly sorted lists, and real libraries use it for short runs inside faster algorithms.</p>
+<pre><code>def insertion_sort(xs):
+    for i in range(1, len(xs)):
+        j = i
+        while j &gt; 0 and xs[j - 1] &gt; xs[j]:
+            xs[j - 1], xs[j] = xs[j], xs[j - 1]   # slide left
+            j -= 1</code></pre>
+
+  <div class="problem" data-id="sort-p1" data-answer="9|nine">
+    <span class="qtag">Practice 1</span>
+    <p class="q">How many comparisons does insertion sort make on a list of 10 items that's already sorted?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Each item from the second onward compares once with its left neighbor, finds it smaller, and stops.</details>
+    <div class="solution" hidden><p><strong>9</strong>, one per item after the first: n − 1. The same list reversed takes 45 (every item slides all the way). Best case O(n), worst case O(n²).</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="merge">Merge sort</h2>
+  <p>The fast sorts use <span class="hl">divide and conquer</span>, the recursion idea from stage 2. <strong>Merge sort</strong> splits the list in half, sorts each half recursively, then <em>merges</em> the two sorted halves by repeatedly taking the smaller front item:</p>
+<pre><code>def merge_sort(xs):
+    if len(xs) &lt;= 1:
+        return xs                                   # base case: already sorted
+    mid = len(xs) // 2
+    left, right = merge_sort(xs[:mid]), merge_sort(xs[mid:])   # leap of faith
+    out, i, j = [], 0, 0
+    while i &lt; len(left) and j &lt; len(right):        # merge: O(n)
+        if left[i] &lt;= right[j]:
+            out.append(left[i]); i += 1
+        else:
+            out.append(right[j]); j += 1
+    return out + left[i:] + right[j:]</code></pre>
+  <p>Why O(n log n)? Halving n until the pieces have one item takes log₂ n levels. At every level, the merges together touch all n items once. So the total is n work per level × log n levels. Unlike quicksort, merge sort is O(n log n) on every input; the price is extra memory for the merged output.</p>
+
+  <div class="problem" data-id="sort-p2" data-answer="3|three">
+    <span class="qtag">Practice 2</span>
+    <p class="q">Merge sort on 8 items: how many levels of merging are there?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Merges of 1+1 items, then 2+2, then...</details>
+    <div class="solution" hidden><p><strong>3</strong>: pairs into 2s, 2s into 4s, 4s into 8. That's log₂ 8. Each level does about 8 units of merging, so roughly 8 × 3 = 24 steps in total.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="quick">Quicksort</h2>
+  <p><strong>Quicksort</strong> divides differently. It picks one item, the <em>pivot</em>, and partitions the list so everything smaller is on its left and everything larger on its right. The pivot is now in its final place, and quicksort sorts the two sides recursively. No merging needed, and it sorts in place, which makes it very fast in practice.</p>
+  <p>Its speed depends on the pivot. If the pivot lands near the middle, each split halves the problem and the total is O(n log n). The version in the panel uses the last item as the pivot. On already sorted input, that's always the largest item, so every partition peels off just one item, and the total becomes n + (n − 1) + ... + 1: <strong>O(n²)</strong>. Real implementations avoid this by choosing the pivot randomly, or as the median of a few samples.</p>
+
+  <div class="problem" data-id="sort-p3" data-answer="10|ten">
+    <span class="qtag">Practice 3</span>
+    <p class="q">Quicksort with the last item as pivot runs on the already sorted list [1, 2, 3, 4, 5]. How many comparisons does it make in total?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The first partition compares the 4 other items with the pivot 5, and leaves [1, 2, 3, 4] to sort.</details>
+    <div class="solution" hidden><p>4 + 3 + 2 + 1 = <strong>10</strong>, which is n(n − 1)/2. The worst case is exactly selection sort's count. Try "Already sorted" with quicksort in the panel at 32 items: 496 comparisons.</p></div>
+  </div>
+
+  <div class="mcq" data-id="sort-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">What makes quicksort hit its O(n²) worst case?</p>
+    <div class="choices">
+      <button type="button" data-why="Random input gives balanced splits on average. That's the good case.">Random input</button>
+      <button type="button">Pivots that keep landing at one end, so each split removes only one item</button>
+      <button type="button" data-why="Quicksort's work is comparisons and swaps; it doesn't merge.">Merging large halves</button>
+      <button type="button" data-why="The recursion depth is a symptom of bad pivots, not the cause.">Too many recursive calls in Python</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Unbalanced splits.</strong> A split of n into 0 and n − 1 makes no real progress. Random pivots make that astronomically unlikely, which is why quicksort's expected time is O(n log n) on any input.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="limit">The speed limit</h2>
+  <p>Could a cleverer algorithm sort in O(n)? Not if it only learns about the data by comparing pairs. Here's the argument. A list of n distinct items can be in n! different orders, and the sort must tell them all apart. Each comparison has two outcomes, so k comparisons can distinguish at most 2ᵏ orders. You need 2ᵏ ≥ n!, so k ≥ log₂(n!), which works out to about n log₂ n. Every comparison sort needs <span class="hl">Ω(n log n)</span> comparisons in the worst case; merge sort is as good as it gets.</p>
+  <p>(Sorts that don't compare can beat it on special data. Counting sort puts small integers straight into buckets by value in O(n), for example. But for arbitrary items, n log n is the limit.)</p>
+
+  <div class="problem" data-id="sort-p4" data-answer="3|three">
+    <span class="qtag">Practice 4</span>
+    <p class="q">What's the smallest number of comparisons that can sort <em>any</em> list of 3 distinct items?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>3 items have 3! = 6 possible orders. How many yes-or-no answers do you need to tell 6 things apart?</details>
+    <div class="solution" hidden><p>Two comparisons give at most 4 outcomes, which isn't enough for 6 orders. You need <strong>3</strong>, and 3 is enough.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="python">Sorting in Python</h2>
+  <p>In real code, call <code>sorted(xs)</code> (returns a new list) or <code>xs.sort()</code> (sorts in place). Both use <span class="hl">Timsort</span>, which Tim Peters wrote for Python in 2002. It finds runs that are already in order, extends short ones with insertion sort, and merges them like merge sort. That makes it O(n log n) in the worst case and close to O(n) on data that's nearly sorted, which real data often is. Java, Android, and V8 (Chrome's JavaScript engine) adopted it too.</p>
+  <p>Timsort is <span class="hl">stable</span>: items that compare equal keep their original order. That lets you sort by several things in steps, and it makes <code>key</code> functions predictable:</p>
+<pre><code>people = [("Ada", 36), ("Grace", 85), ("Alan", 41), ("Linus", 36)]
+sorted(people, key=lambda p: p[1])
+# [('Ada', 36), ('Linus', 36), ('Alan', 41), ('Grace', 85)]
+#   Ada and Linus tie at 36 and stay in their original order</code></pre>
+
+  <div class="problem" data-id="sort-p5" data-answer="['a', 'd', 'bb', 'cc']|[&quot;a&quot;, &quot;d&quot;, &quot;bb&quot;, &quot;cc&quot;]|a d bb cc">
+    <span class="qtag">Practice 5</span>
+    <p class="q">What does <code>sorted(["bb", "a", "cc", "d"], key=len)</code> return?</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off" placeholder="e.g. ['x', 'y']"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Sort by length. Among items with equal length, a stable sort keeps the original order.</details>
+    <div class="solution" hidden><p><strong>['a', 'd', 'bb', 'cc']</strong>. The one-letter strings come first in their original order (a before d), then the two-letter ones (bb before cc).</p></div>
+  </div>
+
+  <div class="mcq" data-id="sort-q2" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">A log file is sorted by time, but a few late entries are slightly out of place. Which sort handles it fastest?</p>
+    <div class="choices">
+      <button type="button" data-why="Selection sort scans everything left for each position: always about n²/2 comparisons.">Selection sort</button>
+      <button type="button" data-why="With the last item as pivot, nearly sorted input is close to quicksort's worst case.">Quicksort with the last item as pivot</button>
+      <button type="button" data-why="Merge sort is always n log n; it doesn't notice that the data is nearly sorted.">Plain merge sort</button>
+      <button type="button">Insertion sort, or Python's Timsort</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>Both are <strong>adaptive</strong>: they do less work on nearly sorted data, approaching O(n). Timsort was designed around this case, because real data is so often partly ordered.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>The bug in Timsort, 2015</h3>
+    <p>Timsort had run in Python since 2002 and in Java since 2011, sorting data on billions of devices. In 2015, researchers in the EU's ENVISAGE project tried to formally prove Java's version correct using a verification tool called KeY. The proof failed. Timsort keeps a small stack of runs waiting to be merged, sized in advance based on a rule about run lengths, and the code only checked that rule for the top three runs. The researchers constructed inputs that broke the rule deeper in the stack, which made Java's sort crash with an out-of-bounds error. The smallest such input was 67,108,864 items, so no test suite had found it. Python, Java, and Android all shipped fixes. Testing shows a bug is present; only proof shows one is absent.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Selection sort is always O(n²). Insertion sort is O(n²) but O(n) on nearly sorted data.</li>
+    <li>Merge sort: split, sort halves, merge. O(n log n) always, with extra memory.</li>
+    <li>Quicksort: partition around a pivot. O(n log n) on average, O(n²) with bad pivots; pick them randomly.</li>
+    <li>Comparison sorts can't beat Ω(n log n): there are n! orders to tell apart.</li>
+    <li>Use <code>sorted</code> with <code>key=</code>. It's Timsort: stable and fast on partly sorted data.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+<pre><code>import random, timeit
+
+xs = [random.random() for _ in range(5_000)]
+
+def insertion_sort(a):
+    a = a[:]
+    for i in range(1, len(a)):
+        j = i
+        while j &gt; 0 and a[j - 1] &gt; a[j]:
+            a[j - 1], a[j] = a[j], a[j - 1]
+            j -= 1
+    return a
+
+print(timeit.timeit(lambda: insertion_sort(xs), number=1))   # seconds
+print(timeit.timeit(lambda: sorted(xs), number=1))           # around a millisecond</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 4</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="sorting">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Trees, binary search trees, and heaps</strong>: keeping data sorted while it changes.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/" target="_blank" rel="noopener">MIT 6.006: Introduction to Algorithms</a><span>Lectures 3 and 5 cover sorting, merge sort, the comparison lower bound, and linear-time sorts.</span></li>
+      <li><a href="https://algs4.cs.princeton.edu/22mergesort/" target="_blank" rel="noopener">Princeton Algorithms 2.2: Mergesort</a><span>Top-down and bottom-up merge sort, with the n log n proof.</span></li>
+      <li><a href="https://algs4.cs.princeton.edu/23quicksort/" target="_blank" rel="noopener">Princeton Algorithms 2.3: Quicksort</a><span>Partitioning, random shuffles, and three-way quicksort for repeated keys.</span></li>
+      <li><a href="https://github.com/python/cpython/blob/main/Objects/listsort.txt" target="_blank" rel="noopener">Tim Peters: listsort.txt</a><span>Timsort's design, explained by its author in the CPython source tree.</span></li>
+      <li><a href="https://docs.python.org/3/howto/sorting.html" target="_blank" rel="noopener">Python docs: Sorting techniques</a><span>Key functions, stability, and sorting by several fields.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Comparison_sort" target="_blank" rel="noopener">Comparison sort (Wikipedia)</a><span>The n log n lower bound in more detail.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Timsort" target="_blank" rel="noopener">Timsort (Wikipedia)</a><span>How it works, where it's used, and the 2015 formal verification bug.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Sorting visualizer: each algorithm records frames {a, cmp: [i, j], write: [i]} plus running counts.
+  (function () {
+    const $ = id => document.getElementById(id);
+    let algo = 'Insertion', input = 'Random', n = 16, base = [], frames = [], k = 0, timer = null;
+
+    function record(name, start) {
+      const a = start.slice(), out = [];
+      let c = 0, w = 0;
+      const cmp = (i, j) => { c++; out.push({ a: a.slice(), cmp: [i, j], write: [], c, w }); };
+      const set = (i, v) => { a[i] = v; w++; out.push({ a: a.slice(), cmp: [], write: [i], c, w }); };
+      const swap = (i, j) => { const t = a[i]; set(i, a[j]); set(j, t); };
+      if (name === 'Selection') {
+        for (let i = 0; i < a.length; i++) {
+          let m = i;
+          for (let j = i + 1; j < a.length; j++) { cmp(m, j); if (a[j] < a[m]) m = j; }
+          if (m !== i) swap(i, m);
+        }
+      } else if (name === 'Insertion') {
+        for (let i = 1; i < a.length; i++) {
+          let j = i;
+          while (j > 0) { cmp(j - 1, j); if (a[j - 1] > a[j]) { swap(j - 1, j); j--; } else break; }
+        }
+      } else if (name === 'Merge') {
+        (function sort(lo, hi) {
+          if (hi - lo < 1) return;
+          const mid = (lo + hi) >> 1;
+          sort(lo, mid); sort(mid + 1, hi);
+          const left = a.slice(lo, mid + 1), right = a.slice(mid + 1, hi + 1);
+          let i = 0, j = 0, t = lo;
+          while (i < left.length && j < right.length) { cmp(lo + i, mid + 1 + j); set(t++, left[i] <= right[j] ? left[i++] : right[j++]); }
+          while (i < left.length) set(t++, left[i++]);
+          while (j < right.length) set(t++, right[j++]);
+        })(0, a.length - 1);
+      } else {
+        (function quick(lo, hi) {
+          if (lo >= hi) return;
+          let i = lo;
+          for (let j = lo; j < hi; j++) { cmp(j, hi); if (a[j] < a[hi]) { if (i !== j) swap(i, j); i++; } }
+          if (i !== hi) swap(i, hi);
+          quick(lo, i - 1); quick(i + 1, hi);
+        })(0, a.length - 1);
+      }
+      out.push({ a: a.slice(), cmp: [], write: [], c, w });
+      return out;
+    }
+
+    function newData() {
+      base = Array.from({ length: n }, (_, i) => i + 1);
+      if (input === 'Random') for (let i = n - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [base[i], base[j]] = [base[j], base[i]]; }
+      else if (input === 'Reversed') base.reverse();
+      else if (input === 'Nearly sorted') for (let t = 0; t < Math.max(1, n / 8); t++) { const i = Math.floor(Math.random() * (n - 1)); [base[i], base[i + 1]] = [base[i + 1], base[i]]; }
+      rebuild();
+    }
+    function rebuild() { stop(); frames = [{ a: base.slice(), cmp: [], write: [], c: 0, w: 0 }].concat(record(algo, base)); k = 0; render(); }
+
+    function render() {
+      const f = frames[k], last = frames[frames.length - 1];
+      $('bars').innerHTML = f.a.map((v, i) => `<div class="bar${f.cmp.includes(i) ? ' cmp' : ''}${f.write.includes(i) ? ' write' : ''}" style="height:${(v / n) * 100}%"></div>`).join('');
+      const nlogn = Math.round(n * Math.log2(n)), n2 = n * (n - 1) / 2;
+      $('sort-stats').innerHTML = `<span>Comparisons: <b>${f.c}</b>${k === frames.length - 1 ? '' : ` (of ${last.c})`}</span><span>Writes: <b>${f.w}</b></span><span>For n = ${n}: n log₂ n ≈ <b>${nlogn}</b>, n(n − 1)/2 = <b>${n2}</b></span>`;
+      $('sort-msg').textContent = k === frames.length - 1 ? `Sorted. ${algo} sort used ${last.c} comparisons.` : k === 0 ? `${input} input, ${n} items. Press Play.` : '';
+      $('sort-play').textContent = timer ? 'Pause' : 'Play';
+    }
+    function stop() { clearInterval(timer); timer = null; }
+
+    function seg(host, opts, get, set) {
+      opts.forEach(o => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = o; b.setAttribute('aria-pressed', String(o) === String(get()));
+        b.onclick = () => { set(o); [...host.children].forEach(c => c.setAttribute('aria-pressed', c === b)); };
+        host.append(b);
+      });
+    }
+    seg($('algo'), ['Selection', 'Insertion', 'Merge', 'Quick'], () => algo, v => { algo = v; rebuild(); });
+    seg($('input'), ['Random', 'Nearly sorted', 'Already sorted', 'Reversed'], () => input, v => { input = v; newData(); });
+    seg($('size'), [8, 16, 32], () => n, v => { n = v; newData(); });
+
+    $('sort-play').onclick = () => {
+      if (timer) { stop(); return render(); }
+      if (k === frames.length - 1) k = 0;
+      const stride = Math.max(1, Math.round(frames.length / 300)); // finish in about 300 ticks
+      timer = setInterval(() => { k = Math.min(frames.length - 1, k + stride); if (k === frames.length - 1) stop(); render(); }, 30);
+      render();
+    };
+    $('sort-step').onclick = () => { stop(); k = Math.min(frames.length - 1, k + 1); render(); };
+    $('sort-end').onclick = () => { stop(); k = frames.length - 1; render(); };
+    $('sort-new').onclick = newData;
+    newData();
+  })();
+</script>
+</body>
+</html>

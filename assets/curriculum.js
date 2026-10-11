@@ -34,7 +34,7 @@ window.CURRICULUM = [
       { id: 'big-o', title: 'Measuring cost: Big-O', href: 'lessons/11-big-o.html', minutes: 40 },
       { id: 'linear', title: 'Arrays, linked lists, stacks, and queues', href: 'lessons/12-linear-structures.html', minutes: 40 },
       { id: 'hashing', title: 'Hash tables', href: 'lessons/13-hash-tables.html', minutes: 40 },
-      { id: 'sorting', title: 'Sorting' },
+      { id: 'sorting', title: 'Sorting', href: 'lessons/14-sorting.html', minutes: 45 },
       { id: 'trees', title: 'Trees, binary search trees, and heaps' },
       { id: 'graphs', title: 'Graphs: breadth-first and depth-first search' },
       { id: 'shortest-paths', title: 'Shortest paths' },
