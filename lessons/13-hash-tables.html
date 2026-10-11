@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hash tables | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .hrow { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  .hrow input[type=text] { flex: 1 1 10rem; font: 1rem var(--mono); padding: .45rem .6rem; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); }
+  .hrow label { font: .9rem var(--sans); display: flex; gap: .4rem; align-items: center; }
+  .hcalc { font: .95rem var(--mono); margin: .8rem 0; min-height: 1.4em; overflow-wrap: anywhere; }
+  .buckets { display: grid; gap: .25rem; }
+  .bucket { display: grid; grid-template-columns: 2.2rem 1fr; align-items: center; gap: .5rem; }
+  .bucket .i { font: .8rem var(--mono); color: var(--pencil); text-align: right; }
+  .chain { display: flex; flex-wrap: wrap; gap: .25rem; min-height: 1.9rem; align-items: center; border-left: 3px solid var(--rule); padding-left: .5rem; }
+  .key { font: .9rem var(--mono); padding: .1rem .45rem; border: 1.5px solid var(--ink); border-radius: 5px; background: var(--panel); }
+  .key.hot { background: var(--hl); color: var(--hl-ink); }
+  .key.probe { border-style: dashed; }
+  .bucket.hot .chain { border-left-color: var(--ink); }
+  .hstats { display: flex; flex-wrap: wrap; gap: .3rem 1.4rem; font: .9rem var(--sans); margin: .8rem 0 0; }
+  .hstats b { font-family: var(--mono); }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 3: Data structures and algorithms, lesson 3 of 8</div>
+    <h1>Hash tables</h1>
+    <p class="lede">Arrays find item number <code>i</code> instantly but can't find the item <em>named</em> "alice" without searching. Hash tables combine the two: turn the name into a number, and use the number as an array index. It's the idea behind every Python dict and set, and one of the most useful tricks in computing.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="ht-title">
+    <h2 id="ht-title" style="margin-top:0;font-size:1.25rem">Inside a hash table</h2>
+    <div class="try">Add keys and look them up. Watch which bucket each key's hash sends it to. Then switch to the bad hash function.</div>
+    <form class="hrow" id="ht-form">
+      <input type="text" id="ht-key" aria-label="Key" autocomplete="off" spellcheck="false" placeholder="a key, like cat" maxlength="16">
+      <button class="btn" type="submit" data-act="add">Add</button>
+      <button class="btn quiet" type="button" id="ht-find">Look up</button>
+    </form>
+    <div class="hrow" style="margin-top:.6rem">
+      <button class="btn quiet" type="button" id="ht-fill">Add 10 animal names</button>
+      <button class="btn quiet" type="button" id="ht-clear">Clear</button>
+      <label><input type="checkbox" id="ht-bad"> Bad hash: use the key's length</label>
+    </div>
+    <p class="hcalc" id="ht-calc" aria-live="polite"></p>
+    <div class="buckets" id="ht-buckets"></div>
+    <div class="hstats" id="ht-stats"></div>
+  </section>
+  <p>Each row is one slot of an array, called a <em>bucket</em>. To store a key, compute its hash, take the remainder after dividing by the number of buckets, and put it there. To find it again, do the same arithmetic and look in that one bucket. No searching through everything.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain how a hash function turns a key into an array index.</li>
+      <li>Explain collisions, and how chaining and open addressing handle them.</li>
+      <li>Use the load factor to explain why tables resize, and why lookups stay O(1) on average.</li>
+      <li>Explain the worst case, and how attackers exploited it.</li>
+      <li>Say which Python values can be keys, and the rule for writing your own <code>__hash__</code>.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#idea">From key to index</a></li>
+      <li><a href="#collisions">Collisions</a></li>
+      <li><a href="#load">Load factor and resizing</a></li>
+      <li><a href="#worst">The worst case</a></li>
+      <li><a href="#keys">What can be a key</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="idea">From key to index</h2>
+  <p>A <span class="hl">hash function</span> turns any key into a whole number, its hash. A good one has three properties:</p>
+  <ul>
+    <li><strong>Deterministic:</strong> the same key always gives the same hash, or you'd never find anything again.</li>
+    <li><strong>Spreads keys evenly:</strong> similar keys, like "cat" and "car", should land far apart.</li>
+    <li><strong>Fast:</strong> it runs on every insert and lookup.</li>
+  </ul>
+  <p>The panel uses a classic string hash: start at 0, and for each character, multiply by 31 and add the character's code. Then the bucket is the hash modulo the number of buckets:</p>
+<pre><code>def bucket_for(key, num_buckets):
+    h = 0
+    for ch in key:
+        h = (h * 31 + ord(ch)) % 1_000_003     # keep the number manageable
+    return h % num_buckets</code></pre>
+  <p>Python's built-in <code>hash()</code> uses a stronger algorithm called SipHash for strings, but the job is the same.</p>
+
+  <div class="problem" data-id="hash-p1" data-answer="2|two">
+    <span class="qtag">Practice 1</span>
+    <p class="q">A key's hash is 1234, and the table has 8 buckets. Which bucket does it go in?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Take the remainder after dividing by 8: 1234 = 8 × 154 + ?</details>
+    <div class="solution" hidden><p>1234 % 8 = <strong>2</strong>. Buckets are numbered from 0, so the remainder is always a valid index.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="collisions">Collisions</h2>
+  <p>There are far more possible keys than buckets, so sometimes two keys land in the same bucket: a <span class="hl">collision</span>. They're not rare, either. In a room of just 23 people, there's a better than even chance that two share a birthday, even though there are 365 days. Collisions start early for the same reason, so every hash table needs a plan for them:</p>
+  <ul>
+    <li><strong>Chaining:</strong> each bucket holds a small list of every key that landed there. That's what the panel shows. Java's <code>HashMap</code> works this way.</li>
+    <li><strong>Open addressing:</strong> each bucket holds one key; on a collision, probe other buckets in a fixed order until an empty one turns up. Python's dict does this.</li>
+  </ul>
+  <p>Either way, a lookup goes to the right bucket and then compares keys until it finds a match, so a collision costs a few extra comparisons, not a wrong answer.</p>
+
+  <div class="problem" data-id="hash-p2" data-answer="23">
+    <span class="qtag">Practice 2</span>
+    <p class="q">What's the smallest number of people for which the chance that two share a birthday is over 50%? (Ignore leap years.)</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>It's surprisingly small: fewer than 30.</details>
+    <div class="solution" hidden><p><strong>23</strong> gives about 50.7%. With n people there are n(n − 1)/2 pairs, and 23 people make 253 pairs, each of which could match. For a hash table with m buckets, expect the first collision after only about √m keys.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="load">Load factor and resizing</h2>
+  <p>How long are the chains? On average, the number of keys divided by the number of buckets. That ratio, n/m, is the <span class="hl">load factor</span>. If it stays below a fixed limit, the average chain has a constant length, so lookup, insert, and delete are all <strong>O(1) on average</strong>.</p>
+  <p>To keep it there, a hash table <em>resizes</em>: when the load factor passes the limit, it allocates a bigger array (usually twice the size) and re-inserts every key, since each key's bucket depends on the array size. That's O(n), but like the dynamic array in the last lesson it happens rarely enough to average out. CPython resizes a dict when it's two-thirds full. Add keys in the panel and watch it double from 8 to 16 buckets.</p>
+
+  <div class="problem" data-id="hash-p3" data-answer="0.75|.75|3/4|75%">
+    <span class="qtag">Practice 3</span>
+    <p class="q">A table has 8 buckets and holds 6 keys. What is its load factor?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="decimal" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Keys divided by buckets.</details>
+    <div class="solution" hidden><p>6 / 8 = <strong>0.75</strong>. That's past Python's two-thirds limit, so a Python dict this full would already have resized.</p></div>
+  </div>
+
+  <div class="problem" data-id="hash-p4" data-answer="10|ten">
+    <span class="qtag">Practice 4</span>
+    <p class="q">A key with hash 1242 sits in bucket 2 of an 8-bucket table. The table resizes to 16 buckets. Which bucket does the key move to?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Recompute: 1242 % 16.</details>
+    <div class="solution" hidden><p>1242 = 16 × 77 + 10, so bucket <strong>10</strong>. This is why resizing has to re-insert every key: the bucket depends on the table size. (When the size doubles, each key either stays put or moves up by exactly the old size, 2 + 8 = 10.)</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="worst">The worst case</h2>
+  <p>"O(1) on average" assumes the hash spreads keys evenly. Tick "Bad hash" in the panel: it uses each key's length, so all the five-letter animals pile into one bucket. With a chain of length n, a lookup checks every key in it: O(n). A hash table with a bad hash function is just a slow list.</p>
+
+  <div class="mcq" data-id="hash-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">What's the worst-case cost of looking up a key in a hash table with n keys?</p>
+    <div class="choices">
+      <button type="button" data-why="O(1) is the average, assuming keys spread out evenly. Worst case assumes they don't.">O(1)</button>
+      <button type="button" data-why="A hash table doesn't keep keys in sorted order, so there's no binary search.">O(log n)</button>
+      <button type="button">O(n), if every key lands in the same bucket</button>
+      <button type="button" data-why="Each lookup checks one bucket, so it's never worse than checking every key once.">O(n²)</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>O(n)</strong>. Real hash tables rarely get there by accident, but an attacker who knows your hash function can do it on purpose, which is exactly what happened in 2011. (Java 8 later added a defense: long chains in a <code>HashMap</code> turn into balanced trees, capping lookups at O(log n).)</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="keys">What can be a key</h2>
+  <p>A key's hash has to stay the same for as long as it's in the table. If you could change a list after using it as a key, its hash would change, and the table would look in the wrong bucket forever. That's why Python only allows immutable values like strings, numbers, and tuples as dict keys and set items. Python calls them <span class="hl">hashable</span>.</p>
+  <p>Your own classes are hashable by identity by default. If you define <code>__eq__</code> to compare by value (stage 2), you must also define <code>__hash__</code>, and keep the one rule that makes hash tables work: <strong>objects that are equal must have equal hashes</strong>. The reverse isn't required; unequal objects may share a hash, which is just a collision.</p>
+<pre><code>class Point:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+    def __eq__(self, other):
+        return (self.x, self.y) == (other.x, other.y)
+    def __hash__(self):
+        return hash((self.x, self.y))      # equal points give equal hashes</code></pre>
+
+  <div class="mcq" data-id="hash-q2" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">A class's <code>__eq__</code> says two objects are equal when their names match, but its <code>__hash__</code> also mixes in a random number per object. What goes wrong?</p>
+    <div class="choices">
+      <button type="button">An equal object can hash to a different bucket, so a lookup can miss a key that's there</button>
+      <button type="button" data-why="Unequal objects sharing a hash is allowed. The trouble is equal objects with different hashes.">Two different objects might get the same hash</button>
+      <button type="button" data-why="Python doesn't check this rule for you; it just gives wrong answers.">Python raises an error when you define the class</button>
+      <button type="button" data-why="Speed isn't the problem. Correctness is.">Lookups become O(n)</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Missed lookups.</strong> The table only compares keys inside one bucket. If equal objects hash differently, <code>key in d</code> looks in the wrong bucket and says False even though an equal key is stored.</p></div>
+  </div>
+
+  <div class="mcq" data-id="hash-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">Since 2012, Python picks a random secret value at startup and mixes it into every string hash. Why?</p>
+    <div class="choices">
+      <button type="button" data-why="Randomness makes hashes vary between runs, but within one run they're consistent, and speed is about the same.">It makes dict lookups faster</button>
+      <button type="button" data-why="Hashing for dicts isn't encryption. Use the hashlib or secrets modules for security uses.">It encrypts the keys stored in dicts</button>
+      <button type="button" data-why="Insertion order has nothing to do with the hash.">It keeps dicts in insertion order</button>
+      <button type="button">So attackers can't predict which keys collide</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>If attackers can't predict the hash, <strong>they can't craft thousands of keys that collide</strong>. That's also why <code>hash("cat")</code> prints a different number each time you start Python, and why you must never save those numbers to a file or send them to another process.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>Hash flooding, 2011</h3>
+    <p>At the Chaos Communication Congress in December 2011, Alexander Klink and Julian Wälde showed that the web servers behind PHP, Java, Python, Ruby, and ASP.NET could be knocked over with a single request. Web frameworks put a form's fields into a hash table, and the hash functions were public and predictable. So the researchers computed many thousands of field names that all landed in the same bucket. Inserting them turned O(1) operations into an O(n²) pile-up, and a single crafted request could keep a server's CPU busy for minutes. Languages responded by randomizing their hash functions per process. Python made that the default in version 3.3, and in 3.4 switched strings to SipHash, a function designed to resist exactly this attack.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>A hash table turns a key into an array index: <code>hash(key) % number_of_buckets</code>.</li>
+    <li>Collisions are normal (the birthday problem). Chaining and open addressing both handle them.</li>
+    <li>Keeping the load factor bounded by resizing makes operations O(1) on average.</li>
+    <li>The worst case is O(n), when keys pile into one bucket. Randomized hashes keep attackers from forcing it.</li>
+    <li>Keys must be immutable. Equal objects must have equal hashes.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+<pre><code>print(hash("cat"))              # changes every time you restart Python
+print(hash(42), hash((1, 2)))   # small ints hash to themselves; tuples combine their items
+
+d = {}
+try:
+    d[[1, 2]] = "nope"
+except TypeError as e:
+    print(e)                    # cannot use 'list' as a dict key (unhashable type: 'list')</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 3</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="hashing">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Sorting</strong>, the most studied problem in computer science, and why the good algorithms are O(n log n).</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/" target="_blank" rel="noopener">MIT 6.006: Introduction to Algorithms</a><span>Lecture 4, Hashing: hash functions, chaining, and the analysis of average-case O(1).</span></li>
+      <li><a href="https://algs4.cs.princeton.edu/34hash/" target="_blank" rel="noopener">Princeton Algorithms 3.4: Hash tables</a><span>Separate chaining and linear probing, with code and experiments.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Hash_table" target="_blank" rel="noopener">Hash table (Wikipedia)</a><span>Collision strategies, load factors, and resizing in depth.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Birthday_problem" target="_blank" rel="noopener">Birthday problem (Wikipedia)</a><span>The math behind early collisions.</span></li>
+      <li><a href="https://docs.python.org/3/reference/datamodel.html#object.__hash__" target="_blank" rel="noopener">Python docs: object.__hash__</a><span>The rules for writing your own hash, including the equal-objects rule.</span></li>
+      <li><a href="https://peps.python.org/pep-0456/" target="_blank" rel="noopener">PEP 456: Secure and interchangeable hash algorithm</a><span>Why Python switched string hashing to SipHash in 3.4.</span></li>
+      <li><a href="https://fahrplan.events.ccc.de/congress/2011/Fahrplan/events/4680.en.html" target="_blank" rel="noopener">28C3: Effective denial of service attacks against web application platforms</a><span>The 2011 hash flooding talk by Klink and Wälde.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Hash table with separate chaining; resizes from 8 to 16 to 32 buckets past a load factor of 0.75.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const ANIMALS = ['cat', 'horse', 'zebra', 'tiger', 'otter', 'koala', 'lemur', 'panda', 'camel', 'eagle'];
+    let m = 8, keys = [], hot = null, msg = '';
+    const goodHash = k => { let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) % 1000003; return h; };
+    const hash = k => ($('ht-bad').checked ? k.length : goodHash(k));
+    const bucket = k => hash(k) % m;
+    const explain = k => $('ht-bad').checked ? `len("${k}") = ${k.length}, and ${k.length} % ${m} = ${bucket(k)}`
+      : `hash("${k}") = ${hash(k).toLocaleString('en-US')}, and ${hash(k).toLocaleString('en-US')} % ${m} = ${bucket(k)}`;
+
+    function add(k) {
+      if (!k) return;
+      if (keys.includes(k)) { hot = k; msg = `${explain(k)}. "${k}" is already there, so nothing changes.`; return; }
+      keys.push(k); hot = k;
+      msg = `${explain(k)}. "${k}" goes in bucket ${bucket(k)}.`;
+      if (keys.length / m > 0.75 && m < 32) { m *= 2; msg += ` The load factor passed 0.75, so the table doubled to ${m} buckets and re-inserted every key.`; }
+    }
+    function find(k) {
+      if (!k) return;
+      const b = bucket(k), chain = keys.filter(x => bucket(x) === b), i = chain.indexOf(k);
+      hot = k;
+      msg = `${explain(k)}. Checked bucket ${b}: ` + (i >= 0 ? `found it after ${i + 1} comparison${i ? 's' : ''}.` : `${chain.length ? `compared against ${chain.length} key${chain.length > 1 ? 's' : ''}, ` : 'empty, '}so "${k}" isn't in the table.`);
+    }
+    function render() {
+      const lens = Array.from({ length: m }, (_, b) => keys.filter(x => bucket(x) === b));
+      const hb = hot === null ? -1 : bucket(hot);
+      $('ht-buckets').innerHTML = lens.map((chain, b) =>
+        `<div class="bucket${b === hb ? ' hot' : ''}"><span class="i">${b}</span><div class="chain">${chain.map(k => `<span class="key${k === hot ? ' hot' : ''}">${k.replace(/</g, '&lt;')}</span>`).join('')}</div></div>`).join('');
+      const longest = Math.max(0, ...lens.map(c => c.length));
+      $('ht-stats').innerHTML = `<span>Keys: <b>${keys.length}</b></span><span>Buckets: <b>${m}</b></span><span>Load factor: <b>${(keys.length / m).toFixed(2)}</b></span><span>Longest chain: <b>${longest}</b></span>`;
+      $('ht-calc').textContent = msg || 'Type a key and press Add.';
+    }
+    $('ht-form').onsubmit = e => { e.preventDefault(); add($('ht-key').value.trim()); $('ht-key').value = ''; render(); };
+    $('ht-find').onclick = () => { find($('ht-key').value.trim()); render(); };
+    $('ht-fill').onclick = () => { ANIMALS.forEach(add); msg = 'Added 10 animals. Most are five letters long, which matters for the bad hash.'; hot = null; render(); };
+    $('ht-clear').onclick = () => { m = 8; keys = []; hot = null; msg = ''; render(); };
+    $('ht-bad').onchange = () => { msg = $('ht-bad').checked ? 'Now every key goes in bucket len(key) % ' + m + '. Same keys, terrible spread.' : 'Back to the good hash: keys spread out again.'; render(); };
+    ['cat', 'dog', 'owl'].forEach(add); msg = ''; hot = null;
+    render();
+  })();
+</script>
+</body>
+</html>
