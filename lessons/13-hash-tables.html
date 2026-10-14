@@ -265,7 +265,7 @@ except TypeError as e:
       if (keys.length / m > 0.75 && m < 32) { m *= 2; msg += ` The load factor passed 0.75, so the table doubled to ${m} buckets and re-inserted every key.`; }
     }
     function find(k) {
-      if (!k) return;
+      if (!k) { msg = 'Type a key to look up.'; hot = null; return; }
       const b = bucket(k), chain = keys.filter(x => bucket(x) === b), i = chain.indexOf(k);
       hot = k;
       msg = `${explain(k)}. Checked bucket ${b}: ` + (i >= 0 ? `found it after ${i + 1} comparison${i ? 's' : ''}.` : `${chain.length ? `compared against ${chain.length} key${chain.length > 1 ? 's' : ''}, ` : 'empty, '}so "${k}" isn't in the table.`);
