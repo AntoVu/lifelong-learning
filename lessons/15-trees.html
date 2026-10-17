@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trees, binary search trees, and heaps | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .bst-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+  .bst-row input { width: 6rem; font: 1rem var(--mono); padding: .45rem .6rem; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); }
+  .bst-row .btn { font-size: .88rem; padding: .35em .8em; }
+  .tree-wrap { overflow-x: auto; background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; margin-top: .4rem; }
+  #bst { display: block; margin: 0 auto; max-width: none; }
+  #bst line { stroke: var(--ink); stroke-width: 1.5; }
+  #bst circle { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+  #bst .path circle { fill: var(--hl); stroke-width: 2.5; }
+  #bst .path text { fill: #1b2a41; }
+  #bst line.path { stroke-width: 3; }
+  #bst text { font: 600 13px var(--mono); text-anchor: middle; dominant-baseline: central; }
+  .bst-stats { display: flex; flex-wrap: wrap; gap: .3rem 1.4rem; font: .9rem var(--sans); margin: .7rem 0 .3rem; }
+  .bst-stats b { font-family: var(--mono); }
+  .bst-msg { font: .95rem var(--sans); margin: 0; min-height: 1.4em; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 3: Data structures and algorithms, lesson 5 of 8</div>
+    <h1>Trees, binary search trees, and heaps</h1>
+    <p class="lede">A sorted list makes searching fast (binary search) but inserting slow (shift everything). A hash table makes both fast but forgets order. Trees keep data in order <em>and</em> stay fast to change, as long as they stay bushy. This lesson shows how, and what happens when they don't.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="bst-title">
+    <h2 id="bst-title" style="margin-top:0;font-size:1.25rem">Grow a binary search tree</h2>
+    <div class="try">Insert numbers or search for one; the path the tree follows lights up. Then compare inserting 1 to 7 in order with the balanced order.</div>
+    <form class="bst-row" id="bst-form">
+      <input id="bst-val" inputmode="numeric" aria-label="Number from 1 to 99" placeholder="1–99" autocomplete="off">
+      <button class="btn" type="submit">Insert</button>
+      <button class="btn quiet" type="button" id="bst-find">Search</button>
+    </form>
+    <div class="bst-row">
+      <button class="btn quiet" type="button" data-fill="1,2,3,4,5,6,7">Insert 1 to 7 in order</button>
+      <button class="btn quiet" type="button" data-fill="4,2,6,1,3,5,7">Insert 4, 2, 6, 1, 3, 5, 7</button>
+      <button class="btn quiet" type="button" data-fill="random">10 random</button>
+      <button class="btn quiet" type="button" id="bst-clear">Clear</button>
+    </div>
+    <div class="tree-wrap"><svg id="bst" role="img" aria-label="Binary search tree"></svg></div>
+    <div class="bst-stats" id="bst-stats"></div>
+    <p class="bst-msg" id="bst-msg" aria-live="polite"></p>
+  </section>
+  <p>Both buttons insert the same seven numbers. One order gives a tree three levels tall; the other gives a seven-level chain that's really just a linked list. The cost of every search, insert, and delete is the height of the tree, so that difference is the whole story of this lesson.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Use tree vocabulary: root, child, leaf, height.</li>
+      <li>Search and insert in a binary search tree, and say what they cost.</li>
+      <li>Explain why balance matters, and what self-balancing trees do about it.</li>
+      <li>Traverse a tree in-order, pre-order, and post-order.</li>
+      <li>Use a heap as a priority queue, including Python's <code>heapq</code>.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#trees">Trees</a></li>
+      <li><a href="#bst">Binary search trees</a></li>
+      <li><a href="#balance">Height is everything</a></li>
+      <li><a href="#traversal">Traversals</a></li>
+      <li><a href="#heaps">Heaps and priority queues</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="trees">Trees</h2>
+  <p>A <span class="hl">tree</span> is a set of nodes where each node has some children and exactly one parent, except the top one, the <em>root</em>. Nodes with no children are <em>leaves</em>. You've met several already: folders on a disk, the call tree of <code>fib</code>, the parse tree of the interpreter, and every web page's HTML. A tree's <em>height</em> is the number of levels from the root to its deepest leaf. In a <span class="hl">binary tree</span>, each node has at most two children, left and right.</p>
+  <p>Trees are naturally recursive: each child is the root of a smaller tree. So most tree code is a short recursive function with "empty tree" as the base case, exactly the leap of faith from stage 2.</p>
+
+  <!-- 2 -->
+  <h2 id="bst">Binary search trees</h2>
+  <p>A <span class="hl">binary search tree</span> (BST) adds one rule: for every node, everything in its left subtree is smaller, and everything in its right subtree is larger. That rule turns every node into a binary-search decision:</p>
+<pre><code>class Node:
+    def __init__(self, key):
+        self.key, self.left, self.right = key, None, None
+
+def search(node, key):
+    while node is not None:
+        if key == node.key:
+            return node
+        node = node.left if key &lt; node.key else node.right   # discard one side
+    return None
+
+def insert(node, key):
+    if node is None:
+        return Node(key)                      # found the empty spot
+    if key &lt; node.key:
+        node.left = insert(node.left, key)
+    elif key &gt; node.key:
+        node.right = insert(node.right, key)
+    return node</code></pre>
+  <p>Each step goes down one level, so search and insert take at most <em>h</em> steps, where h is the height. For a well-shaped tree with n nodes, h is about log₂ n. A balanced tree of a million keys is only about 20 levels tall.</p>
+
+  <div class="problem" data-id="tree-p1" data-answer="10|ten">
+    <span class="qtag">Practice 1</span>
+    <p class="q">A perfectly balanced BST holds 1,023 keys (every level full). At most how many nodes does a search look at?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Full levels hold 1, 2, 4, 8, ... nodes. How many levels add up to 1,023?</details>
+    <div class="solution" hidden><p>1 + 2 + 4 + ... + 512 = 1,023, which is 10 levels, so at most <strong>10</strong> nodes: one per level, root to leaf. That's the same count as binary search on a sorted list of 1,023 items, and no coincidence.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="balance">Height is everything</h2>
+  <p>A BST's shape depends on the order keys arrive. Insert sorted keys and each new one is bigger than everything so far, so it always goes right: the tree becomes a chain with height n, and searching it is O(n). Sorted input is common in real life (timestamps, IDs, alphabetical imports), so this isn't a rare accident.</p>
+
+  <div class="problem" data-id="tree-p2" data-answer="7|seven">
+    <span class="qtag">Practice 2</span>
+    <p class="q">You insert 1, 2, 3, 4, 5, 6, 7 into an empty BST in that order. What is the tree's height, counted in levels?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Try it in the panel. Where does each new key go?</details>
+    <div class="solution" hidden><p><strong>7</strong>: every key is the right child of the one before. Inserted as 4, 2, 6, 1, 3, 5, 7, the same keys make a tree of height 3.</p></div>
+  </div>
+
+  <p><span class="hl">Self-balancing trees</span> fix this by rearranging themselves with small local moves called <em>rotations</em> whenever an insert or delete makes them lopsided, guaranteeing a height of O(log n). The classic designs are AVL trees (1962) and red-black trees (1978). You rarely write one yourself, but you use them constantly: Java's <code>TreeMap</code> is a red-black tree, as C++'s <code>std::map</code> usually is, and databases use a wide, shallow cousin called the B-tree (stage 7).</p>
+
+  <div class="mcq" data-id="tree-q1" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">Why use a balanced BST instead of a hash table?</p>
+    <div class="choices">
+      <button type="button">It keeps keys in sorted order, so you can find the smallest, the next larger, or everything in a range</button>
+      <button type="button" data-why="A hash table's average lookup is O(1), faster than a tree's O(log n).">Lookups are faster on average</button>
+      <button type="button" data-why="Both work with keys that can be compared or hashed; neither needs less memory in general.">It uses no extra memory</button>
+      <button type="button" data-why="Both can be built for any comparable keys. That's not the deciding factor.">Hash tables can't store numbers</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Order.</strong> "All orders from last Tuesday to today" or "the next appointment after 3 PM" are fast in a BST and slow in a hash table, which would have to check every key. When you only need exact lookups, use the hash table.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="traversal">Traversals</h2>
+  <p>To visit every node, recurse into both children. The three classic orders differ only in when you handle the node itself:</p>
+<pre><code>def in_order(node):              # left, node, right
+    if node:
+        in_order(node.left)
+        print(node.key)
+        in_order(node.right)
+
+# pre-order:  node, left, right   (copy a tree, print a folder outline)
+# post-order: left, right, node   (delete a tree, total up folder sizes)</code></pre>
+  <p>In-order traversal of a BST prints the keys <strong>in sorted order</strong>, because everything left of a node is smaller and everything right is larger. That gives yet another sorting algorithm: insert everything into a balanced BST, then read it in order, for O(n log n) in total.</p>
+
+  <div class="problem" data-id="tree-p3" data-answer="13458|1 3 4 5 8">
+    <span class="qtag">Practice 3</span>
+    <p class="q">Insert 5, 3, 8, 1, 4 into an empty BST. What does an in-order traversal print?</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off" placeholder="e.g. 1 2 3"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>You can skip drawing the tree: what does in-order always give for a BST?</details>
+    <div class="solution" hidden><p><strong>1 3 4 5 8</strong>, sorted. Pre-order would print 5 3 1 4 8 (root first), which records the tree's shape and lets you rebuild it.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="heaps">Heaps and priority queues</h2>
+  <p>Sometimes you don't need everything sorted, only quick access to the <em>smallest</em> item, again and again: the next event in a simulation, the most urgent job, the closest unvisited city in the shortest-path lesson. That's a <span class="hl">priority queue</span>, and the standard way to build one is a <span class="hl">binary heap</span>.</p>
+  <p>A min-heap is a binary tree with a weaker rule than a BST: every node is smaller than its children. So the root is the minimum. The tree is always filled level by level, left to right, which means it can live in a plain array with no pointers at all: the children of index i are at 2i + 1 and 2i + 2.</p>
+
+  <figure class="figure">
+    <svg viewBox="0 0 600 200" role="img" aria-labelledby="hp-t" style="max-width:620px">
+      <title id="hp-t">A min-heap holding 1, 3, 5, 7, 4, 8 as a tree with root 1, and the same heap stored in an array in level order: index 0 holds 1, index 1 holds 3, index 2 holds 5, index 3 holds 7, index 4 holds 4, index 5 holds 8.</title>
+      <g stroke="var(--ink)" stroke-width="1.5"><line x1="150" y1="30" x2="90" y2="85"/><line x1="150" y1="30" x2="210" y2="85"/><line x1="90" y1="85" x2="55" y2="145"/><line x1="90" y1="85" x2="125" y2="145"/><line x1="210" y1="85" x2="175" y2="145"/></g>
+      <g class="mono" font-size="14" font-weight="600" text-anchor="middle">
+        <circle cx="150" cy="30" r="16" fill="var(--hl)" stroke="var(--ink)" stroke-width="2"/><text x="150" y="35" fill="#1b2a41">1</text>
+        <circle cx="90" cy="85" r="16" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="90" y="90">3</text>
+        <circle cx="210" cy="85" r="16" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="210" y="90">5</text>
+        <circle cx="55" cy="145" r="16" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="55" y="150">7</text>
+        <circle cx="125" cy="145" r="16" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="125" y="150">4</text>
+        <circle cx="175" cy="145" r="16" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="175" y="150">8</text>
+      </g>
+      <g class="mono" font-size="15" font-weight="600" text-anchor="middle">
+        <rect x="300" y="70" width="46" height="36" fill="var(--hl)" stroke="var(--ink)" stroke-width="1.5"/><text x="323" y="93" fill="#1b2a41">1</text>
+        <rect x="346" y="70" width="46" height="36" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="369" y="93">3</text>
+        <rect x="392" y="70" width="46" height="36" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="415" y="93">5</text>
+        <rect x="438" y="70" width="46" height="36" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="461" y="93">7</text>
+        <rect x="484" y="70" width="46" height="36" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="507" y="93">4</text>
+        <rect x="530" y="70" width="46" height="36" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="553" y="93">8</text>
+      </g>
+      <g class="gsmall" text-anchor="middle"><text x="323" y="124">0</text><text x="369" y="124">1</text><text x="415" y="124">2</text><text x="461" y="124">3</text><text x="507" y="124">4</text><text x="553" y="124">5</text></g>
+      <text x="300" y="56" class="gsmall">the same heap as an array (level by level)</text>
+      <text x="300" y="160" class="gsmall">children of index i: 2i + 1 and 2i + 2</text>
+      <text x="300" y="178" class="gsmall">parent of index i: (i − 1) // 2</text>
+    </svg>
+    <figcaption>A min-heap is only partly ordered: 4 sits below 3 but 5 is higher up. That's enough to keep the minimum on top, and much cheaper to maintain than full order.</figcaption>
+  </figure>
+
+  <p>To add an item, put it at the end of the array and swap it up while it's smaller than its parent. To remove the minimum, move the last item to the root and swap it down below its smaller child. Both walk one path, so both are O(log n). Python's <code>heapq</code> module does this on a plain list:</p>
+<pre><code>import heapq
+tasks = []
+heapq.heappush(tasks, (2, "write report"))
+heapq.heappush(tasks, (1, "fix outage"))
+heapq.heappush(tasks, (3, "lunch"))
+heapq.heappop(tasks)       # (1, 'fix outage'): smallest priority first</code></pre>
+
+  <div class="problem" data-id="tree-p4" data-answer="7|seven">
+    <span class="qtag">Practice 4</span>
+    <p class="q">In a heap stored as an array, what is the index of the left child of the node at index 3?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Left child: 2i + 1.</details>
+    <div class="solution" hidden><p>2 × 3 + 1 = <strong>7</strong>, and the right child is at 8. Going back up, (7 − 1) // 2 = 3. No pointers needed, which also makes heaps cache-friendly.</p></div>
+  </div>
+
+  <div class="problem" data-id="tree-p5" data-answer="1|one">
+    <span class="qtag">Practice 5</span>
+    <p class="q">You <code>heappush</code> 5, 1, 8, 3 onto an empty list, in that order. What does <code>heappop</code> return?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>A min-heap always gives back the smallest item, whatever the insertion order.</details>
+    <div class="solution" hidden><p><strong>1</strong>. The list left behind is <code>[3, 5, 8]</code>, still a valid heap. Pop again and you get 3.</p></div>
+  </div>
+
+  <div class="mcq" data-id="tree-q2" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">Which job is a heap bad at?</p>
+    <div class="choices">
+      <button type="button" data-why="That's exactly what a heap is for: the minimum is at index 0.">Finding the smallest item</button>
+      <button type="button" data-why="Push the n items, then pop k times: a classic heap job.">Getting the 10 smallest of a million numbers</button>
+      <button type="button">Checking whether the number 42 is anywhere in it</button>
+      <button type="button" data-why="Each scheduled event goes in with its time as priority; the next one is always on top.">Running scheduled events in time order</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Searching for an arbitrary value.</strong> The heap rule says nothing about left versus right, so 42 could be anywhere: O(n). Use a set for membership, a BST for order, and a heap for "what's next".</p></div>
+  </div>
+
+  <h2>Where trees run your computer</h2>
+  <div class="story">
+    <h3>The Linux scheduler's red-black tree</h3>
+    <p>Your operating system constantly decides which of hundreds of ready programs gets the CPU next. In 2007, Linux adopted the Completely Fair Scheduler, which kept every runnable task in a red-black tree ordered by how much CPU time it had received. The next task to run was simply the leftmost node, the one that had waited the most, and inserting a task back after its turn cost O(log n) however many tasks there were. In 2023, Linux 6.6 began moving to a newer scheduler called EEVDF, which still keeps tasks in a red-black tree, with extra information stored in each node. Stage 5 covers schedulers in depth; the data structure underneath is the one from this lesson.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>A BST keeps smaller keys left and larger keys right. Search and insert cost O(height).</li>
+    <li>Balanced, the height is about log₂ n. Sorted inserts make a chain of height n.</li>
+    <li>Self-balancing trees (AVL, red-black) guarantee O(log n) and keep keys in order.</li>
+    <li>In-order traversal of a BST visits keys in sorted order.</li>
+    <li>A heap keeps the minimum on top, lives in an array, and pushes and pops in O(log n). Use <code>heapq</code>.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>The k largest items of a big list, without sorting all of it:</p>
+<pre><code>import heapq, random
+
+scores = [random.randint(0, 1_000_000) for _ in range(1_000_000)]
+print(heapq.nlargest(5, scores))     # uses a small heap of size 5: O(n log 5)</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 5</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="trees">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Graphs</strong>, where nodes can connect to anything, and you'll explore them with breadth-first and depth-first search.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/" target="_blank" rel="noopener">MIT 6.006: Introduction to Algorithms</a><span>Lectures 6 to 8 cover binary trees, AVL balancing, and binary heaps.</span></li>
+      <li><a href="https://algs4.cs.princeton.edu/32bst/" target="_blank" rel="noopener">Princeton Algorithms 3.2: Binary search trees</a><span>Search, insert, delete, and ordered operations, with analysis of random inserts.</span></li>
+      <li><a href="https://algs4.cs.princeton.edu/24pq/" target="_blank" rel="noopener">Princeton Algorithms 2.4: Priority queues</a><span>Binary heaps and heapsort, step by step.</span></li>
+      <li><a href="https://docs.python.org/3/library/heapq.html" target="_blank" rel="noopener">Python docs: heapq</a><span>The heap functions, plus notes on building a full priority queue with them.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Red%E2%80%93black_tree" target="_blank" rel="noopener">Red-black tree (Wikipedia)</a><span>The balancing rules and rotations, with diagrams.</span></li>
+      <li><a href="https://docs.kernel.org/scheduler/sched-design-CFS.html" target="_blank" rel="noopener">Linux kernel docs: CFS scheduler</a><span>The kernel's own description of its time-ordered red-black tree.</span></li>
+      <li><a href="https://visualgo.net/en/bst" target="_blank" rel="noopener">VisuAlgo: Binary search tree and AVL tree</a><span>Animated insert, delete, and rotations.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // BST playground: insert and search, drawing the tree with nodes placed by in-order position.
+  (function () {
+    const $ = id => document.getElementById(id);
+    let root = null, path = [], msg = '';
+    const MAX = 15;
+    const count = n => (n ? 1 + count(n.l) + count(n.r) : 0);
+    const height = n => (n ? 1 + Math.max(height(n.l), height(n.r)) : 0);
+
+    function insert(v) {
+      if (count(root) >= MAX) { msg = `The panel holds up to ${MAX} keys. Clear it to start again.`; return; }
+      path = [];
+      if (!root) { root = { v, l: null, r: null }; path = [root]; msg = `${v} becomes the root.`; return; }
+      let n = root, steps = [];
+      while (true) {
+        path.push(n);
+        if (v === n.v) { msg = `${v} is already in the tree.`; return; }
+        const side = v < n.v ? 'l' : 'r';
+        steps.push(`${v} ${v < n.v ? '<' : '>'} ${n.v}, go ${side === 'l' ? 'left' : 'right'}`);
+        if (!n[side]) { n[side] = { v, l: null, r: null }; path.push(n[side]); msg = `${steps.join('; ')}. Inserted after ${steps.length} comparison${steps.length > 1 ? 's' : ''}.`; return; }
+        n = n[side];
+      }
+    }
+    function search(v) {
+      path = []; let n = root, c = 0;
+      while (n) { path.push(n); c++; if (v === n.v) { msg = `Found ${v} after ${c} comparison${c > 1 ? 's' : ''}.`; return; } n = v < n.v ? n.l : n.r; }
+      msg = `${v} isn't in the tree. Checked ${c} node${c === 1 ? '' : 's'} before reaching an empty spot.`;
+    }
+    function render() {
+      const svg = $('bst');
+      if (!root) { svg.innerHTML = ''; svg.setAttribute('width', 300); svg.setAttribute('height', 60); svg.setAttribute('viewBox', '0 0 300 60'); }
+      else {
+        let i = 0; const nodes = [];
+        (function place(n, d) { if (!n) return; place(n.l, d + 1); n.x = i++; n.d = d; nodes.push(n); place(n.r, d + 1); })(root, 0);
+        const W = 40, H = 54, pad = 26, width = i * W + pad * 2, height_ = height(root) * H + pad;
+        const px = n => pad + n.x * W + W / 2, py = n => pad + n.d * H;
+        let html = '';
+        nodes.forEach(n => ['l', 'r'].forEach(s => { if (n[s]) html += `<line class="${path.includes(n) && path.includes(n[s]) ? 'path' : ''}" x1="${px(n)}" y1="${py(n)}" x2="${px(n[s])}" y2="${py(n[s])}"/>`; }));
+        nodes.forEach(n => { html += `<g class="${path.includes(n) ? 'path' : ''}"><circle cx="${px(n)}" cy="${py(n)}" r="15"/><text x="${px(n)}" y="${py(n)}">${n.v}</text></g>`; });
+        svg.setAttribute('viewBox', `0 0 ${width} ${height_}`); svg.setAttribute('width', width); svg.setAttribute('height', height_);
+        svg.innerHTML = html;
+      }
+      const n = count(root), h = height(root);
+      $('bst-stats').innerHTML = `<span>Keys: <b>${n}</b></span><span>Height: <b>${h}</b> level${h === 1 ? '' : 's'}</span><span>Best possible height for ${n} keys: <b>${n ? Math.ceil(Math.log2(n + 1)) : 0}</b></span>`;
+      $('bst-msg').textContent = msg || 'Insert a number, or use one of the buttons.';
+    }
+    const read = () => { const v = parseInt($('bst-val').value, 10); return v >= 1 && v <= 99 ? v : null; };
+    $('bst-form').onsubmit = e => { e.preventDefault(); const v = read(); if (v === null) msg = 'Type a whole number from 1 to 99.'; else insert(v); $('bst-val').value = ''; render(); };
+    $('bst-find').onclick = () => { const v = read(); if (v === null) msg = 'Type a number to search for.'; else search(v); render(); };
+    document.querySelectorAll('[data-fill]').forEach(b => b.onclick = () => {
+      root = null; path = [];
+      let vals = b.dataset.fill === 'random' ? [] : b.dataset.fill.split(',').map(Number);
+      if (!vals.length) { while (vals.length < 10) { const v = 1 + Math.floor(Math.random() * 99); if (!vals.includes(v)) vals.push(v); } }
+      vals.forEach(insert); path = [];
+      msg = `Inserted ${vals.join(', ')}. Height ${height(root)}.`;
+      render();
+    });
+    $('bst-clear').onclick = () => { root = null; path = []; msg = ''; render(); };
+    [50, 30, 70, 20, 40, 60, 80].forEach(insert); path = []; msg = '';
+    render();
+  })();
+</script>
+</body>
+</html>
