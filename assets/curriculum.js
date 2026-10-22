@@ -36,7 +36,7 @@ window.CURRICULUM = [
       { id: 'hashing', title: 'Hash tables', href: 'lessons/13-hash-tables.html', minutes: 40 },
       { id: 'sorting', title: 'Sorting', href: 'lessons/14-sorting.html', minutes: 45 },
       { id: 'trees', title: 'Trees, binary search trees, and heaps', href: 'lessons/15-trees.html', minutes: 45 },
-      { id: 'graphs', title: 'Graphs: breadth-first and depth-first search' },
+      { id: 'graphs', title: 'Graphs: breadth-first and depth-first search', href: 'lessons/16-graphs.html', minutes: 45 },
       { id: 'shortest-paths', title: 'Shortest paths' },
       { id: 'dp', title: 'Dynamic programming' },
     ],
