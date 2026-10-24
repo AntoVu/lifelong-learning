@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shortest paths | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  #dg { display: block; width: 100%; max-width: 620px; margin: .4rem auto 0; }
+  #dg line { stroke: var(--rule); stroke-width: 3; }
+  #dg line.tree { stroke: var(--ink); stroke-width: 3; }
+  #dg line.relax { stroke: #e08a6d; stroke-width: 5; }
+  #dg line.route { stroke: var(--hl); stroke-width: 9; }
+  #dg .w { font: 600 13px var(--mono); text-anchor: middle; dominant-baseline: central; }
+  #dg .wbg { fill: var(--paper); }
+  #dg circle { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
+  #dg .done circle { fill: var(--ink); }
+  #dg .done .nm { fill: var(--paper); }
+  #dg .cur circle { fill: var(--hl); stroke-width: 3; }
+  #dg .cur .nm { fill: #1b2a41; }
+  #dg .nm { font: 700 15px var(--mono); text-anchor: middle; dominant-baseline: central; }
+  #dg .d { font: 600 12px var(--mono); text-anchor: middle; fill: var(--ink-2); }
+  .dj-row { display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: center; margin-bottom: .4rem; }
+  .dj-row .lbl { font: 600 .85rem var(--sans); color: var(--ink-2); }
+  .dj-row label { font: .9rem var(--sans); display: flex; gap: .4rem; align-items: center; }
+  .dj-info { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 1rem; margin-top: .6rem; font: .9rem var(--sans); }
+  .dj-info table { margin: 0; font-size: .85rem; }
+  .dj-info td, .dj-info th { padding: .2rem .5rem; }
+  .dj-info td:nth-child(2), .dj-info td:nth-child(3) { font-family: var(--mono); }
+  .dj-info tr.done td { color: var(--ink-2); }
+  .pq { font: .9rem var(--mono); margin: .2rem 0 0; }
+  .dj-msg { font: .95rem var(--sans); margin: .6rem 0; min-height: 2.8em; }
+  @media (max-width: 600px) { .dj-info { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 3: Data structures and algorithms, lesson 7 of 8</div>
+    <h1>Shortest paths</h1>
+    <p class="lede">Breadth-first search finds the route with the fewest hops. But on a real map, some roads are long and some are short, and the fewest turns isn't the quickest drive. This lesson adds lengths to the edges, and works through the algorithm behind route planners and internet routers: Dijkstra's.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="dj-title">
+    <h2 id="dj-title" style="margin-top:0;font-size:1.25rem">Dijkstra's algorithm, one step at a time</h2>
+    <div class="try">Step through from A. Each step finalizes the closest unfinished node (dark), then tries to improve its neighbors' distances (orange edges). Pick a destination to see the route.</div>
+    <div class="dj-row">
+      <button class="btn" type="button" id="dj-step">Step</button>
+      <button class="btn quiet" type="button" id="dj-run">Run to the end</button>
+      <button class="btn quiet" type="button" id="dj-reset">Reset</button>
+      <span class="lbl">Route to</span><div class="seg" id="dj-dest" role="group" aria-label="Destination"></div>
+      <label><input type="checkbox" id="dj-bfs"> Show BFS's fewest-hops route instead</label>
+    </div>
+    <svg id="dg" viewBox="0 0 560 260" role="img" aria-label="Weighted graph with six nodes, A to F"></svg>
+    <p class="dj-msg" id="dj-msg" aria-live="polite"></p>
+    <div class="dj-info">
+      <div><table><thead><tr><th>Node</th><th>Distance</th><th>Reached from</th></tr></thead><tbody id="dj-table"></tbody></table></div>
+      <div><strong>Priority queue</strong> (closest first)<p class="pq" id="dj-pq"></p></div>
+    </div>
+  </section>
+  <p>Run it to the end, then pick E as the destination and tick the BFS box. BFS's route A → C → E uses only two edges but has length 12. Dijkstra's route A → C → B → D → E uses four edges but has length 10. With weights, fewer hops can mean a longer trip.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain why BFS doesn't find shortest paths when edges have different lengths.</li>
+      <li>Run Dijkstra's algorithm by hand, including relaxing edges.</li>
+      <li>Explain why Dijkstra's algorithm is correct, and why negative edges break it.</li>
+      <li>Give its running time with a heap: O((V + E) log V).</li>
+      <li>Explain how A* uses a guess about the remaining distance to search less.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#weights">Weighted graphs</a></li>
+      <li><a href="#dijkstra">Dijkstra's algorithm</a></li>
+      <li><a href="#why">Why it works, and when it doesn't</a></li>
+      <li><a href="#astar">A*: searching toward the goal</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="weights">Weighted graphs</h2>
+  <p>In a <span class="hl">weighted graph</span>, every edge carries a number: kilometers, minutes, dollars, milliseconds of network delay. The length of a path is the sum of its edge weights, and the <em>shortest path</em> is the one with the smallest sum. BFS counts edges, so it treats a 1-minute road and a 60-minute road the same. It's only right when every edge has the same weight.</p>
+
+  <div class="problem" data-id="sp-p1" data-answer="12|twelve">
+    <span class="qtag">Practice 1</span>
+    <p class="q">In the panel's graph, BFS's fewest-hops route from A to E is A → C → E. What is its total length?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Add the weights on the edges A–C and C–E.</details>
+    <div class="solution" hidden><p>2 + 10 = <strong>12</strong>. Two hops, but not the shortest: there's a route of length 10 with twice as many edges.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="dijkstra">Dijkstra's algorithm</h2>
+  <p>Edsger Dijkstra's idea (1956) is to grow the set of nodes whose shortest distance is known, always adding the closest one next. Every node gets a <em>tentative</em> distance, starting at 0 for the source and infinity for everything else. Then repeat:</p>
+  <ol>
+    <li>Take the unfinished node u with the smallest tentative distance. Its distance is now final.</li>
+    <li><strong>Relax</strong> each edge from u: if going through u gives a neighbor v a shorter route, update v's distance to <code>dist[u] + weight(u, v)</code> and remember that v is reached from u.</li>
+  </ol>
+<pre><code>import heapq
+
+def dijkstra(graph, source):              # graph[u] = [(v, weight), ...]
+    dist = {source: 0}
+    pq = [(0, source)]                    # a min-heap of (distance, node), lesson 5
+    done = set()
+    while pq:
+        d, u = heapq.heappop(pq)
+        if u in done:
+            continue                      # an outdated entry; skip it
+        done.add(u)
+        for v, w in graph[u]:
+            if d + w &lt; dist.get(v, float("inf")):
+                dist[v] = d + w           # relax: found a shorter route to v
+                heapq.heappush(pq, (d + w, v))
+    return dist</code></pre>
+  <p>The heap from lesson 5 is what makes "take the closest unfinished node" fast. Each edge may push one entry, and each push or pop costs O(log V), so the whole thing runs in <span class="hl">O((V + E) log V)</span>. That's fast enough for road networks with millions of intersections.</p>
+
+  <div class="problem" data-id="sp-p2" data-answer="8|eight">
+    <span class="qtag">Practice 2</span>
+    <p class="q">Node u is finalized with distance 5. An edge u → v has weight 3, and v's tentative distance is currently 10. What is v's distance after relaxing the edge?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Is 5 + 3 smaller than 10?</details>
+    <div class="solution" hidden><p>5 + 3 = <strong>8</strong>, which beats 10, so v is updated to 8 and marked as reached from u. If the edge weighed 7, then 12 would lose to 10 and nothing would change.</p></div>
+  </div>
+
+  <div class="problem" data-id="sp-p3" data-answer="acbdef|a c b d e f">
+    <span class="qtag">Practice 3</span>
+    <p class="q">In what order does Dijkstra's algorithm finalize the nodes of the panel's graph, starting from A?</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off" placeholder="e.g. A B C"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Step through the panel, or work it by hand: after A, the closest is C at 2. Then B is reachable at 2 + 1 = 3.</details>
+    <div class="solution" hidden><p><strong>A C B D E F</strong>, with final distances 0, 2, 3, 8, 10, 13. They come out in increasing order of distance, which is always true for Dijkstra.</p></div>
+  </div>
+
+  <div class="problem" data-id="sp-p4" data-answer="10|ten">
+    <span class="qtag">Practice 4</span>
+    <p class="q">What is the shortest distance from A to E?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Follow the "reached from" column back from E.</details>
+    <div class="solution" hidden><p><strong>10</strong>, by A → C → B → D → E: 2 + 1 + 5 + 2.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="why">Why it works, and when it doesn't</h2>
+  <p>Why is it safe to call the closest unfinished node final? Any other route to it would have to leave the finished set through some other unfinished node, which is already at least as far away, and then add more edges. Since edge weights are never negative, adding edges can't make a route shorter. So nothing can ever beat the current distance. That's a <span class="hl">greedy algorithm</span>: it makes the locally best choice and never revisits it, and here that's provably correct.</p>
+  <p>The proof leans on "never negative". With a negative edge, like a toll road that pays you, a route could get shorter by going further, and Dijkstra's early decisions can be wrong. For those graphs there's the <strong>Bellman-Ford</strong> algorithm, which relaxes every edge V − 1 times, O(V · E). It's slower, but it handles negative edges and can even detect a negative cycle, a loop you could go around forever to make the "distance" smaller without limit.</p>
+
+  <div class="mcq" data-id="sp-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">Why can Dijkstra's algorithm finalize the closest unfinished node right away?</p>
+    <div class="choices">
+      <button type="button" data-why="Dijkstra works on graphs with cycles; the argument isn't about cycles.">Because the graph has no cycles</button>
+      <button type="button">Because weights are non-negative, so any other route to it can only be as long or longer</button>
+      <button type="button" data-why="It doesn't check every path; that would be exponential.">Because it has already checked every possible path to that node</button>
+      <button type="button" data-why="The heap provides speed, not correctness.">Because the heap guarantees it</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Non-negative weights.</strong> Every other route must pass through a node that's already at least as far, and adding edges can only add distance. Remove that guarantee and the argument, and the algorithm, fails.</p></div>
+  </div>
+
+  <div class="mcq" data-id="sp-q2" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">A currency trading graph uses edge weights that can be negative. Which algorithm should find the cheapest path?</p>
+    <div class="choices">
+      <button type="button" data-why="Negative edges break Dijkstra's greedy argument; it can return wrong answers.">Dijkstra's algorithm</button>
+      <button type="button" data-why="BFS ignores weights entirely.">Breadth-first search</button>
+      <button type="button" data-why="A* is Dijkstra plus a heuristic, so it has the same problem.">A*</button>
+      <button type="button">Bellman-Ford</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Bellman-Ford.</strong> And its negative-cycle detection is useful here: in currency exchange (with weights set to the negative logarithm of each rate), a negative cycle is an arbitrage loop that turns a dollar into more than a dollar.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="astar">A*: searching toward the goal</h2>
+  <p>Dijkstra's algorithm spreads out in every direction, like BFS's ripples. If you only want the route from Chicago to New York, it wastes effort finalizing towns west of Chicago. <span class="hl">A*</span> ("A star", 1968) fixes that by ordering the priority queue by distance so far <em>plus a guess</em> of the distance remaining, such as the straight-line distance to the goal. Nodes in the right direction get explored first.</p>
+  <p>The guess, called a <em>heuristic</em>, must never overestimate the real remaining distance. Straight-line distance qualifies, since no road is shorter than a straight line. With such a heuristic, A* still finds the true shortest path, usually after exploring far fewer nodes. It's the standard pathfinding algorithm in video games. Map apps go further still: they preprocess the road network once, adding shortcuts between important junctions, so each query only searches a small part of the map.</p>
+
+  <div class="mcq" data-id="sp-q3" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">For A* on a road map, why is straight-line distance a safe heuristic?</p>
+    <div class="choices">
+      <button type="button">It never overestimates: no road route can be shorter than a straight line</button>
+      <button type="button" data-why="It's usually lower than the real road distance. That's the point.">It's always exactly equal to the road distance</button>
+      <button type="button" data-why="A heuristic that overestimates can make A* miss the shortest path.">It's larger than the road distance, which makes A* faster</button>
+      <button type="button" data-why="It does use geometry, but correctness depends on not overestimating.">It ignores the map entirely</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>A heuristic that <strong>never overestimates</strong> (called admissible) keeps A* correct. A guess of 0 is also admissible; then A* is exactly Dijkstra.</p></div>
+  </div>
+
+  <h2>Where this idea came from</h2>
+  <div class="story">
+    <h3>Twenty minutes in a café, 1956</h3>
+    <p>Dijkstra designed his algorithm to demonstrate a new computer at the Mathematical Centre in Amsterdam, and wanted a problem that people without a math background could understand: the shortest route between two Dutch cities. Years later he recalled that he designed it one morning while shopping in Amsterdam with his fiancée, sitting on a café terrace with a cup of coffee, in about twenty minutes and without pencil and paper. He said avoiding pencil and paper forced him to keep it simple. It was published in 1959 in a three-page paper, and today versions of it run inside internet routers (the OSPF routing protocol computes routes this way) and behind every navigation app.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>With weighted edges, the shortest path minimizes total weight, not hops. BFS only works when all weights are equal.</li>
+    <li>Dijkstra: repeatedly finalize the closest unfinished node and relax its edges. Use a heap: O((V + E) log V).</li>
+    <li>It's correct because weights are non-negative. With negative edges, use Bellman-Ford, O(V · E).</li>
+    <li>A* adds a heuristic guess of the remaining distance; if it never overestimates, A* stays correct and searches less.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>Run the <code>dijkstra</code> function above on the panel's graph:</p>
+<pre><code>edges = [("A", "B", 4), ("A", "C", 2), ("B", "C", 1), ("B", "D", 5), ("C", "D", 8),
+         ("C", "E", 10), ("D", "E", 2), ("D", "F", 6), ("E", "F", 3)]
+graph = {}
+for a, b, w in edges:
+    graph.setdefault(a, []).append((b, w))
+    graph.setdefault(b, []).append((a, w))     # undirected: both directions
+
+print(dijkstra(graph, "A"))
+# {'A': 0, 'B': 3, 'C': 2, 'D': 8, 'E': 10, 'F': 13}</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 7</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="shortest-paths">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Dynamic programming</strong>, the last lesson of the stage, which turns stage 2's memoization into a general technique.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/" target="_blank" rel="noopener">MIT 6.006: Introduction to Algorithms</a><span>Lectures 11 to 14 cover weighted shortest paths: DAG relaxation, Bellman-Ford, and Dijkstra.</span></li>
+      <li><a href="https://algs4.cs.princeton.edu/44sp/" target="_blank" rel="noopener">Princeton Algorithms 4.4: Shortest paths</a><span>Dijkstra, acyclic shortest paths, and Bellman-Ford, with the arbitrage example.</span></li>
+      <li><a href="https://www.redblobgames.com/pathfinding/a-star/introduction.html" target="_blank" rel="noopener">Red Blob Games: Introduction to A*</a><span>A famously clear interactive explanation of BFS, Dijkstra, and A* on game maps.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm" target="_blank" rel="noopener">Dijkstra's algorithm (Wikipedia)</a><span>History, including Dijkstra's own account of the café, and variations.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Bellman%E2%80%93Ford_algorithm" target="_blank" rel="noopener">Bellman-Ford algorithm (Wikipedia)</a><span>Negative edges and negative cycle detection.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/A*_search_algorithm" target="_blank" rel="noopener">A* search algorithm (Wikipedia)</a><span>Heuristics, admissibility, and the 1968 paper from Stanford Research Institute.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Open_Shortest_Path_First" target="_blank" rel="noopener">Open Shortest Path First (Wikipedia)</a><span>The internet routing protocol that runs Dijkstra's algorithm inside routers.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Dijkstra stepper on a fixed six-node graph. Frames record finalize-and-relax steps.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const POS = { A: [50, 130], B: [200, 50], C: [200, 210], D: [360, 50], E: [360, 210], F: [510, 130] };
+    const EDGES = [['A', 'B', 4], ['A', 'C', 2], ['B', 'C', 1], ['B', 'D', 5], ['C', 'D', 8], ['C', 'E', 10], ['D', 'E', 2], ['D', 'F', 6], ['E', 'F', 3]];
+    const NODES = Object.keys(POS);
+    const adj = {}; NODES.forEach(n => { adj[n] = []; });
+    EDGES.forEach(([a, b, w]) => { adj[a].push([b, w]); adj[b].push([a, w]); });
+    let frames = [], k = 0, dest = null;
+
+    (function record() {
+      const dist = { A: 0 }, prev = {}, done = [];
+      let pq = [[0, 'A']];
+      frames.push({ dist: { ...dist }, prev: {}, done: [], cur: null, relaxed: [], pq: pq.slice(), msg: 'A starts at distance 0; everything else is unknown (∞). Press Step.' });
+      while (pq.length) {
+        pq.sort((x, y) => x[0] - y[0] || x[1].localeCompare(y[1]));
+        const [d, u] = pq.shift();
+        if (done.includes(u)) continue;
+        done.push(u);
+        const relaxed = [], notes = [];
+        adj[u].forEach(([v, w]) => {
+          if (done.includes(v)) return;
+          const old = dist[v];
+          if (old === undefined || d + w < old) { dist[v] = d + w; prev[v] = u; pq.push([d + w, v]); relaxed.push(v); notes.push(`${v}: ${old === undefined ? '∞' : old} → ${d + w}`); }
+          else notes.push(`${v}: ${d} + ${w} = ${d + w} doesn't beat ${old}`);
+        });
+        frames.push({ dist: { ...dist }, prev: { ...prev }, done: done.slice(), cur: u, relaxed, pq: pq.slice().sort((x, y) => x[0] - y[0]),
+          msg: `Finalize ${u} at distance ${d}. ` + (notes.length ? `Relax its edges: ${notes.join('; ')}.` : 'All its neighbors are already final.') });
+      }
+      frames[frames.length - 1].msg += ' Every node is final. Pick a destination to see its route.';
+    })();
+
+    // BFS fewest-hops parents, for comparison.
+    const bfsPrev = {}; (function () { const seen = new Set(['A']), q = ['A']; while (q.length) { const u = q.shift(); adj[u].map(x => x[0]).sort().forEach(v => { if (!seen.has(v)) { seen.add(v); bfsPrev[v] = u; q.push(v); } }); } })();
+    const routeOf = (to, prev) => { const p = [to]; while (prev[p[0]]) p.unshift(prev[p[0]]); return p; };
+    const weight = (a, b) => EDGES.find(e => (e[0] === a && e[1] === b) || (e[0] === b && e[1] === a))[2];
+
+    function render() {
+      const f = frames[k], final = k === frames.length - 1;
+      const useBfs = $('dj-bfs').checked && final;
+      const route = final && dest ? routeOf(dest, useBfs ? bfsPrev : f.prev) : [];
+      const onRoute = (a, b) => route.some((x, i) => i && ((route[i - 1] === a && x === b) || (route[i - 1] === b && x === a)));
+      let html = '';
+      EDGES.forEach(([a, b, w]) => {
+        const [x1, y1] = POS[a], [x2, y2] = POS[b];
+        const tree = f.prev[b] === a || f.prev[a] === b;
+        const relax = f.cur && ((a === f.cur && f.relaxed.includes(b)) || (b === f.cur && f.relaxed.includes(a)));
+        const cls = onRoute(a, b) ? 'route' : relax ? 'relax' : tree ? 'tree' : '';
+        if (onRoute(a, b)) html += `<line class="tree" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+        html += `<line class="${cls}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        html += `<circle class="wbg" cx="${mx}" cy="${my}" r="11" style="fill:var(--paper);stroke:none"/><text class="w" x="${mx}" y="${my}">${w}</text>`;
+      });
+      NODES.forEach(n => {
+        const [x, y] = POS[n], d = f.dist[n];
+        html += `<g class="${n === f.cur ? 'cur' : f.done.includes(n) ? 'done' : ''}"><circle cx="${x}" cy="${y}" r="20"/><text class="nm" x="${x}" y="${y}">${n}</text></g>`;
+        html += `<text class="d" x="${x}" y="${y + (y > 130 ? 36 : y < 130 ? -28 : 36)}">${d === undefined ? '∞' : d}</text>`;
+      });
+      $('dg').innerHTML = html;
+      $('dj-table').innerHTML = NODES.map(n => `<tr class="${f.done.includes(n) ? 'done' : ''}"><td>${n}</td><td>${f.dist[n] === undefined ? '∞' : f.dist[n]}${f.done.includes(n) ? ' ✓' : ''}</td><td>${f.prev[n] || (n === 'A' ? 'start' : '')}</td></tr>`).join('');
+      const live = f.pq.filter(([d, n]) => !f.done.includes(n));
+      // Entries beaten by a later relaxation stay in the heap; Dijkstra skips them when popped.
+      $('dj-pq').textContent = live.length ? live.map(([d, n]) => `(${d}, ${n})${d > f.dist[n] ? ' outdated' : ''}`).join('  ') : 'empty';
+      $('dj-msg').textContent = route.length
+        ? `${useBfs ? 'BFS (fewest hops)' : 'Dijkstra (shortest)'}: ${route.join(' → ')}, ${route.length - 1} edges, total length ${route.slice(1).reduce((s, x, i) => s + weight(route[i], x), 0)}.`
+        : f.msg;
+      $('dj-step').disabled = final;
+    }
+    ['B', 'C', 'D', 'E', 'F'].forEach(n => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = n; b.setAttribute('aria-pressed', 'false');
+      b.onclick = () => { dest = n; k = frames.length - 1; [...$('dj-dest').children].forEach(c => c.setAttribute('aria-pressed', c === b)); render(); };
+      $('dj-dest').append(b);
+    });
+    $('dj-step').onclick = () => { k = Math.min(frames.length - 1, k + 1); render(); };
+    $('dj-run').onclick = () => { k = frames.length - 1; render(); };
+    $('dj-reset').onclick = () => { k = 0; dest = null; [...$('dj-dest').children].forEach(c => c.setAttribute('aria-pressed', 'false')); render(); };
+    $('dj-bfs').onchange = () => { if (!dest) { dest = 'E'; [...$('dj-dest').children].forEach(c => c.setAttribute('aria-pressed', c.textContent === 'E')); } k = frames.length - 1; render(); };
+    render();
+  })();
+</script>
+</body>
+</html>

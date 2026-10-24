@@ -37,7 +37,7 @@ window.CURRICULUM = [
       { id: 'sorting', title: 'Sorting', href: 'lessons/14-sorting.html', minutes: 45 },
       { id: 'trees', title: 'Trees, binary search trees, and heaps', href: 'lessons/15-trees.html', minutes: 45 },
       { id: 'graphs', title: 'Graphs: breadth-first and depth-first search', href: 'lessons/16-graphs.html', minutes: 45 },
-      { id: 'shortest-paths', title: 'Shortest paths' },
+      { id: 'shortest-paths', title: 'Shortest paths', href: 'lessons/17-shortest-paths.html', minutes: 40 },
       { id: 'dp', title: 'Dynamic programming' },
     ],
   },
