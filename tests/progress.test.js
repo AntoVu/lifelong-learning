@@ -64,3 +64,11 @@ test('stage-2 achievement needs every stage 2 lesson finished', () => {
   P.completeLesson(s, 'interpreters', false, '2026-09-26');
   assert.ok(P.checkAchievements(s, '2026-09-26').includes('stage-2'));
 });
+
+test('stage-3 achievement needs every stage 3 lesson finished', () => {
+  const s = P.fresh();
+  ['big-o', 'linear', 'hashing', 'sorting', 'trees', 'graphs', 'shortest-paths'].forEach(id => P.completeLesson(s, id, false, '2026-10-29'));
+  assert.ok(!P.checkAchievements(s, '2026-10-29').includes('stage-3'));
+  P.completeLesson(s, 'dp', false, '2026-10-29');
+  assert.ok(P.checkAchievements(s, '2026-10-29').includes('stage-3'));
+});

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynamic programming | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .ed-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: .7rem; }
+  .ed-row input { width: 8.5rem; font: 1rem var(--mono); padding: .45rem .6rem; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); }
+  .ed-row .arrow { color: var(--ink-2); }
+  .grid-wrap { overflow-x: auto; }
+  table.dp { width: auto; border-collapse: collapse; font: .95rem var(--mono); margin: 0; }
+  table.dp td, table.dp th { width: 2.2rem; height: 2.1rem; text-align: center; padding: 0; border: 1px solid var(--rule); }
+  table.dp th { font-weight: 700; background: var(--code-bg); }
+  table.dp td.cur { background: var(--hl); color: var(--hl-ink); font-weight: 700; outline: 2px solid var(--ink); }
+  table.dp td.src { background: #cfe0f2; }
+  table.dp td.trace { background: var(--hl); color: var(--hl-ink); }
+  table.dp td.empty { color: transparent; }
+  @media (prefers-color-scheme: dark) { table.dp td.src { background: #2b4563; } }
+  .ed-msg { font: .95rem var(--sans); margin: .8rem 0 .5rem; min-height: 2.8em; }
+  .ops-list { font: .9rem var(--mono); margin: .3rem 0 0; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 3: Data structures and algorithms, lesson 8 of 8</div>
+    <h1>Dynamic programming</h1>
+    <p class="lede">In stage 2, a cache turned <code>fib</code> from exponential to linear. Dynamic programming is that idea made into a method: break a problem into overlapping subproblems, solve each one once, and build the answer from a table. It's behind spell checkers, <code>git diff</code>, DNA comparison, and route planning.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="ed-title">
+    <h2 id="ed-title" style="margin-top:0;font-size:1.25rem">How different are two words?</h2>
+    <div class="try">The edit distance is the fewest single-letter inserts, deletes, and substitutions that turn one word into the other. Step through the table: each cell is built from the three blue cells next to it.</div>
+    <form class="ed-row" id="ed-form">
+      <input id="ed-a" value="kitten" maxlength="10" aria-label="First word" spellcheck="false">
+      <span class="arrow">→</span>
+      <input id="ed-b" value="sitting" maxlength="10" aria-label="Second word" spellcheck="false">
+      <button class="btn quiet" type="submit">Use these words</button>
+    </form>
+    <div class="grid-wrap"><table class="dp" id="ed-table"></table></div>
+    <p class="ed-msg" id="ed-msg" aria-live="polite"></p>
+    <div class="tr-controls">
+      <button class="btn" type="button" id="ed-step">Step</button>
+      <button class="btn quiet" type="button" id="ed-play">Play</button>
+      <button class="btn quiet" type="button" id="ed-end">Fill the table</button>
+    </div>
+    <p class="ops-list" id="ed-ops"></p>
+  </section>
+  <p>The bottom-right cell is the answer. Every other cell answers a smaller question, "how far apart are the first i letters of one word and the first j letters of the other?", and each is computed exactly once from neighbors that are already done.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Recognize problems with overlapping subproblems and optimal substructure.</li>
+      <li>Turn a memoized recursion into a bottom-up table, and back.</li>
+      <li>Follow a recipe to design a DP: subproblems, relation, order, base cases, answer.</li>
+      <li>Solve coin change and edit distance with DP, and explain why greedy fails.</li>
+      <li>Give the running time of a DP: number of subproblems × work per subproblem.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#memo">From memoization to tables</a></li>
+      <li><a href="#recipe">A recipe for DP</a></li>
+      <li><a href="#coins">Coin change, and why greedy fails</a></li>
+      <li><a href="#edit">Edit distance</a></li>
+      <li><a href="#where">Where DP shows up</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="memo">From memoization to tables</h2>
+  <p>Recall the two versions of <code>fib</code>. Naive recursion repeats subproblems exponentially; adding <code>@cache</code> solves each subproblem once. That's <strong>top-down</strong> dynamic programming: write the recursion, cache the answers. You can also go <strong>bottom-up</strong>: start from the base cases and fill a table in an order where everything you need is already there:</p>
+  <div class="side">
+<pre><code># top-down: recursion + cache
+@cache
+def fib(n):
+    if n &lt; 2:
+        return n
+    return fib(n - 1) + fib(n - 2)</code></pre>
+<pre><code># bottom-up: fill a table
+def fib(n):
+    table = [0, 1]
+    for i in range(2, n + 1):
+        table.append(table[i - 1] + table[i - 2])
+    return table[n]</code></pre>
+  </div>
+  <p>Both do O(n) work. Bottom-up avoids deep recursion (no RecursionError at n = 5,000) and often makes it obvious how to save memory; here you only ever need the last two entries. Top-down is often easier to write first, because it's just the recursion you'd write anyway.</p>
+  <p>Not every recursion benefits. DP needs two properties: <span class="hl">overlapping subproblems</span> (the same smaller questions come up again and again, as in <code>fib</code>'s tree) and <span class="hl">optimal substructure</span> (the best answer to the big problem is built from best answers to smaller ones). Merge sort has the second but not the first: its halves never overlap, so caching would save nothing.</p>
+
+  <div class="problem" data-id="dp-p1" data-answer="55">
+    <span class="qtag">Practice 1</span>
+    <p class="q">Fill the bottom-up table for <code>fib</code> up to index 10. What is <code>table[10]</code>?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>0, 1, 1, 2, 3, 5, 8, ... keep going to the eleventh entry.</details>
+    <div class="solution" hidden><p>0, 1, 1, 2, 3, 5, 8, 13, 21, 34, <strong>55</strong>. Nine additions, compared with 177 calls for the naive recursion.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="recipe">A recipe for DP</h2>
+  <p>MIT's 6.006 teaches a checklist for designing any dynamic program. Its name, SRTBOT, is an acronym for:</p>
+  <ul>
+    <li><strong>Subproblems:</strong> define what a smaller version of the problem is, usually by a prefix, suffix, or amount. Write it as a function, like <code>best(x)</code>.</li>
+    <li><strong>Relate:</strong> write a recurrence that solves a subproblem from smaller ones, usually by trying every choice for the first or last step.</li>
+    <li><strong>Topological order:</strong> make sure subproblems only depend on smaller ones, so there are no cycles (lesson 6!).</li>
+    <li><strong>Base cases:</strong> the smallest subproblems, answered directly.</li>
+    <li><strong>Original problem:</strong> which subproblem is the actual answer.</li>
+    <li><strong>Time:</strong> number of subproblems × work per subproblem.</li>
+  </ul>
+  <p>The last line is the payoff: the running time falls straight out of the design.</p>
+
+  <!-- 3 -->
+  <h2 id="coins">Coin change, and why greedy fails</h2>
+  <p>Problem: using coins of given values, make an amount with as few coins as possible. With U.S. coins (1, 5, 10, 25 cents), the obvious strategy works: always take the biggest coin that fits. That's a <em>greedy</em> algorithm, like Dijkstra's. But with coins of 1, 3, and 4, greedy makes 6 as 4 + 1 + 1, three coins, when 3 + 3 uses two. Greedy committed to the 4 and never reconsidered.</p>
+  <p>DP reconsiders every choice. Subproblem: <code>best(x)</code> = fewest coins to make x. Relation: the last coin used is one of the coin values c, so <code>best(x) = 1 + min(best(x − c))</code> over the coins that fit. Base case: <code>best(0) = 0</code>. Order: x from 0 up. Time: amount × number of coins.</p>
+<pre><code>def min_coins(coins, amount):
+    best = [0] + [float("inf")] * amount
+    for x in range(1, amount + 1):
+        for c in coins:
+            if c &lt;= x:
+                best[x] = min(best[x], best[x - c] + 1)
+    return best[amount]
+
+min_coins([1, 3, 4], 6)    # 2</code></pre>
+
+  <div class="problem" data-id="dp-p2" data-answer="2|two">
+    <span class="qtag">Practice 2</span>
+    <p class="q">With coins 1, 3, and 4, what's the fewest coins that make 7?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Try the last coin each way: best(6) + 1, best(4) + 1, or best(3) + 1. You already know best(6) = 2.</details>
+    <div class="solution" hidden><p><strong>2</strong>: 4 + 3. best(3) = 1 and best(4) = 1, so adding one more coin to either gives 2. Greedy happens to get this one right (4, then 3).</p></div>
+  </div>
+
+  <div class="mcq" data-id="dp-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">Why does the greedy strategy fail for coins 1, 3, 4 and amount 6?</p>
+    <div class="choices">
+      <button type="button" data-why="Greedy does find a valid answer (4 + 1 + 1). It's just not the best.">It can't make 6 at all with those coins</button>
+      <button type="button" data-why="Greedy is very fast. Its problem is correctness, not speed.">It runs too slowly</button>
+      <button type="button">Taking the biggest coin first locks in a choice that rules out the best answer</button>
+      <button type="button" data-why="The order the coins are listed in doesn't matter to greedy; it always takes the largest that fits.">The coins aren't listed in sorted order</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>Greedy <strong>never reconsiders</strong>. After taking the 4 it's stuck making 2 from ones. DP tries every possible last coin for every amount, so it can't be trapped by an early choice. Greedy works only when you can prove it does, as Dijkstra did for non-negative edges.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="edit">Edit distance</h2>
+  <p>Now the panel's problem. Subproblem: <code>D[i][j]</code> = edit distance between the first i letters of word A and the first j letters of word B. Relation: look at the last letters. Either delete A's last letter, insert B's last letter, or match the two last letters (free if they're equal, a substitution otherwise):</p>
+<pre><code>D[i][j] = min(D[i-1][j] + 1,                        # delete a letter from A
+              D[i][j-1] + 1,                        # insert a letter from B
+              D[i-1][j-1] + (A[i-1] != B[j-1]))     # match, or substitute</code></pre>
+  <p>Base cases: turning i letters into nothing takes i deletes, so <code>D[i][0] = i</code>, and <code>D[0][j] = j</code>. Order: row by row, left to right, so the cells above and to the left are always ready. Time: one cell per pair of prefixes, constant work each, so O(m × n) for words of length m and n. Following the choices back from the corner gives the actual edits, which the panel lists when the table is full.</p>
+
+  <div class="problem" data-id="dp-p3" data-answer="3|three">
+    <span class="qtag">Practice 3</span>
+    <p class="q">What is the edit distance from "kitten" to "sitting"?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Fill the table in the panel, or find the edits by hand: two letters change and one is added.</details>
+    <div class="solution" hidden><p><strong>3</strong>: k → s, e → i, and insert g at the end. This pair is the standard textbook example. Vladimir Levenshtein defined the distance in 1965.</p></div>
+  </div>
+
+  <div class="problem" data-id="dp-p4" data-answer="2|two">
+    <span class="qtag">Practice 4</span>
+    <p class="q">What is the edit distance from "flaw" to "lawn"?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>"law" appears in both. What has to happen at each end?</details>
+    <div class="solution" hidden><p><strong>2</strong>: delete the f, insert an n. Substituting letter by letter would take 4, which is why the table considers inserts and deletes too.</p></div>
+  </div>
+
+  <div class="mcq" data-id="dp-q2" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">What's the running time of the edit distance table for words of lengths m and n?</p>
+    <div class="choices">
+      <button type="button" data-why="That would be a single pass over one word; the table pairs every prefix with every prefix.">O(m + n)</button>
+      <button type="button">O(m × n)</button>
+      <button type="button" data-why="That's the naive recursion without a table. DP is the cure.">O(3^(m + n))</button>
+      <button type="button" data-why="There's no sorting involved.">O(n log n)</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>(m + 1) × (n + 1) cells, each computed in constant time from three neighbors: <strong>O(m × n)</strong>. The plain recursion tries three choices at every step: exponential. Subproblems × work per subproblem, the T in SRTBOT.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="where">Where DP shows up</h2>
+  <ul>
+    <li><strong>Diff tools</strong> like <code>git diff</code> find the longest common subsequence of two files' lines, a close cousin of edit distance.</li>
+    <li><strong>Spell checkers and search</strong> suggest words within a small edit distance of what you typed.</li>
+    <li><strong>Biology:</strong> the Needleman–Wunsch algorithm (1970) aligns DNA and protein sequences with this same table, with scores for matches and gaps.</li>
+    <li><strong>Speech recognition</strong> long relied on the Viterbi algorithm, a DP that finds the most likely sequence of sounds or words.</li>
+    <li><strong>Reinforcement learning,</strong> the way game-playing AIs learn, is built on the Bellman equation, the same "best now = best step + best from there" relation.</li>
+  </ul>
+
+  <div class="mcq" data-id="dp-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">Which problem is <em>not</em> a good fit for dynamic programming?</p>
+    <div class="choices">
+      <button type="button" data-why="Counting stair-climbing ways reuses the same smaller counts: classic DP.">Counting the ways to climb n stairs taking 1 or 2 steps</button>
+      <button type="button" data-why="Comparing two files reuses prefix comparisons constantly.">Finding the lines two files have in common</button>
+      <button type="button" data-why="Fewest coins for every smaller amount is exactly the DP table.">Making change with the fewest coins</button>
+      <button type="button">Finding the largest number in an unsorted list</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>The maximum.</strong> One pass with no repeated subproblems; there's nothing to reuse, so a table adds nothing. DP pays off when the same smaller questions keep coming up.</p></div>
+  </div>
+
+  <h2>Where the name came from</h2>
+  <div class="story">
+    <h3>Bellman's camouflage, 1950s</h3>
+    <p>Richard Bellman developed the method at the RAND Corporation, which did research for the U.S. Air Force. In his autobiography, he says the Secretary of Defense at the time, Charles Wilson, hated the word "research", and "mathematical" even more. So Bellman picked a name nobody could object to: "dynamic" because the problems unfolded over time and the word sounded impressive, and "programming" in its old sense of planning a schedule, not writing code. He wrote that it was "something not even a Congressman could object to." The AI textbook authors Russell and Norvig point out that the story can't be strictly true, since Bellman's first paper using the term (1952) came out before Wilson took office (1953). Either way the name stuck, and it's why a technique about tables of subproblems has a name that describes neither.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>DP = recursion + solve each overlapping subproblem once. Top-down caches; bottom-up fills a table.</li>
+    <li>It needs overlapping subproblems and optimal substructure.</li>
+    <li>Design with SRTBOT: subproblems, relate, topological order, base cases, original problem, time.</li>
+    <li>Greedy commits to choices; DP tries them all, once each. Use greedy only with a proof.</li>
+    <li>Edit distance: <code>D[i][j]</code> from three neighbors, O(m × n).</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+<pre><code>def edit_distance(a, b):
+    m, n = len(a), len(b)
+    D = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(m + 1): D[i][0] = i
+    for j in range(n + 1): D[0][j] = j
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            D[i][j] = min(D[i - 1][j] + 1, D[i][j - 1] + 1,
+                          D[i - 1][j - 1] + (a[i - 1] != b[j - 1]))
+    return D[m][n]
+
+print(edit_distance("kitten", "sitting"))   # 3
+print(edit_distance("flaw", "lawn"))        # 2</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 8</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="dp">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">That's the end of stage 3. You can now measure an algorithm's cost, pick the right data structure, and recognize the classic techniques: divide and conquer, greedy, graph search, and dynamic programming. Stage 4, <strong>Computer systems</strong>, goes back down to the machine to see why real code is fast or slow.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/" target="_blank" rel="noopener">MIT 6.006: Introduction to Algorithms</a><span>Lectures 15 to 18 teach dynamic programming with the SRTBOT recipe and many worked examples.</span></li>
+      <li><a href="https://web.stanford.edu/class/cs161/" target="_blank" rel="noopener">Stanford CS161: Design and Analysis of Algorithms</a><span>Dynamic programming and greedy algorithms, with proofs of when greedy works.</span></li>
+      <li><a href="https://www.composingprograms.com/pages/28-efficiency.html" target="_blank" rel="noopener">Composing Programs 2.8: Efficiency</a><span>CS61A on memoization and measuring growth, the bridge from stage 2.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Dynamic_programming" target="_blank" rel="noopener">Dynamic programming (Wikipedia)</a><span>Many classic examples, and Bellman's own account of the name.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Levenshtein_distance" target="_blank" rel="noopener">Levenshtein distance (Wikipedia)</a><span>Edit distance in depth, with the kitten and sitting example.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Needleman%E2%80%93Wunsch_algorithm" target="_blank" rel="noopener">Needleman–Wunsch algorithm (Wikipedia)</a><span>The same table, used to align DNA and proteins.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Edit distance table: fill cells row by row, highlighting the three cells each one depends on.
+  (function () {
+    const $ = id => document.getElementById(id);
+    let A = '', B = '', D = [], order = [], k = 0, timer = null;
+
+    function setup() {
+      stop();
+      A = $('ed-a').value.trim().toLowerCase().slice(0, 10); B = $('ed-b').value.trim().toLowerCase().slice(0, 10);
+      const m = A.length, n = B.length;
+      D = Array.from({ length: m + 1 }, (_, i) => Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+      order = [];
+      for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+        D[i][j] = Math.min(D[i - 1][j] + 1, D[i][j - 1] + 1, D[i - 1][j - 1] + (A[i - 1] !== B[j - 1] ? 1 : 0));
+        order.push([i, j]);
+      }
+      k = 0; render();
+    }
+    // Walk back from the corner to list the edits.
+    function trace() {
+      let i = A.length, j = B.length; const cells = [[i, j]], ops = [];
+      while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && D[i][j] === D[i - 1][j - 1] + (A[i - 1] !== B[j - 1] ? 1 : 0)) { if (A[i - 1] !== B[j - 1]) ops.push(`substitute ${A[i - 1]} → ${B[j - 1]}`); i--; j--; }
+        else if (i > 0 && D[i][j] === D[i - 1][j] + 1) { ops.push(`delete ${A[i - 1]}`); i--; }
+        else { ops.push(`insert ${B[j - 1]}`); j--; }
+        cells.push([i, j]);
+      }
+      return { cells, ops: ops.reverse() };
+    }
+    function render() {
+      const m = A.length, n = B.length, done = k === order.length;
+      const filled = new Set(order.slice(0, k).map(([i, j]) => i + ',' + j));
+      const cur = k > 0 && !done ? order[k - 1] : null;
+      const src = cur ? [[cur[0] - 1, cur[1]], [cur[0], cur[1] - 1], [cur[0] - 1, cur[1] - 1]].map(([i, j]) => i + ',' + j) : [];
+      const tr = done ? trace() : null, trSet = tr ? new Set(tr.cells.map(([i, j]) => i + ',' + j)) : new Set();
+      let html = `<tr><th></th><th>""</th>${[...B].map(c => `<th>${c.replace(/</g, '&lt;')}</th>`).join('')}</tr>`;
+      for (let i = 0; i <= m; i++) {
+        html += `<tr><th>${i === 0 ? '""' : A[i - 1].replace(/</g, '&lt;')}</th>`;
+        for (let j = 0; j <= n; j++) {
+          const key = i + ',' + j, base = i === 0 || j === 0, shown = base || filled.has(key);
+          const cls = cur && cur[0] === i && cur[1] === j ? 'cur' : src.includes(key) ? 'src' : trSet.has(key) ? 'trace' : shown ? '' : 'empty';
+          html += `<td class="${cls}">${shown ? D[i][j] : '·'}</td>`;
+        }
+        html += '</tr>';
+      }
+      $('ed-table').innerHTML = html;
+      if (!m || !n) { $('ed-msg').textContent = `One word is empty, so the distance is just the other word's length: ${Math.max(m, n)}.`; $('ed-ops').textContent = ''; return; }
+      if (done) {
+        $('ed-msg').textContent = `Edit distance from "${A}" to "${B}": ${D[m][n]}. The highlighted cells trace the choices back from the corner.`;
+        $('ed-ops').textContent = tr.ops.length ? 'Edits: ' + tr.ops.join(', ') : 'The words are identical.';
+      } else if (cur) {
+        const [i, j] = cur, same = A[i - 1] === B[j - 1];
+        $('ed-msg').textContent = `D[${i}][${j}]: "${A.slice(0, i)}" → "${B.slice(0, j)}". Delete: ${D[i - 1][j]} + 1. Insert: ${D[i][j - 1]} + 1. ${same ? `Match ${A[i - 1]}: ${D[i - 1][j - 1]} + 0` : `Substitute ${A[i - 1]} → ${B[j - 1]}: ${D[i - 1][j - 1]} + 1`}. Smallest: ${D[i][j]}.`;
+        $('ed-ops').textContent = '';
+      } else {
+        $('ed-msg').textContent = 'The first row and column are the base cases: turning a prefix into the empty string, or the empty string into a prefix. Press Step.';
+        $('ed-ops').textContent = '';
+      }
+      $('ed-step').disabled = $('ed-end').disabled = done;
+    }
+    function stop() { clearInterval(timer); timer = null; $('ed-play').textContent = 'Play'; }
+    $('ed-form').onsubmit = e => { e.preventDefault(); setup(); };
+    $('ed-step').onclick = () => { stop(); k = Math.min(order.length, k + 1); render(); };
+    $('ed-end').onclick = () => { stop(); k = order.length; render(); };
+    $('ed-play').onclick = () => {
+      if (timer) return stop();
+      if (k === order.length) k = 0;
+      $('ed-play').textContent = 'Pause';
+      timer = setInterval(() => { k++; if (k >= order.length) { k = order.length; stop(); } render(); }, 260);
+    };
+    setup();
+  })();
+</script>
+</body>
+</html>

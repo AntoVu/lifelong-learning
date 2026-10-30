@@ -38,7 +38,7 @@ window.CURRICULUM = [
       { id: 'trees', title: 'Trees, binary search trees, and heaps', href: 'lessons/15-trees.html', minutes: 45 },
       { id: 'graphs', title: 'Graphs: breadth-first and depth-first search', href: 'lessons/16-graphs.html', minutes: 45 },
       { id: 'shortest-paths', title: 'Shortest paths', href: 'lessons/17-shortest-paths.html', minutes: 40 },
-      { id: 'dp', title: 'Dynamic programming' },
+      { id: 'dp', title: 'Dynamic programming', href: 'lessons/18-dynamic-programming.html', minutes: 45 },
     ],
   },
   { title: 'Computer systems', summary: 'Memory, caches, assembly, linking, and why your code is fast or slow.', sources: ['CMU 15-213', 'Berkeley CS61C'] },
