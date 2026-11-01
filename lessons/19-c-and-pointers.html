@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C and pointers | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .memgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin: .8rem 0 .6rem; }
+  @media (max-width: 700px) { .memgrid { grid-template-columns: 1fr; } }
+  .memtable { position: relative; padding-right: 2.4rem; }
+  .memtable table { margin: 0; font: .88rem var(--mono); width: 100%; }
+  .memtable td, .memtable th { padding: .3rem .5rem; }
+  .memtable td:first-child { color: var(--pencil); }
+  .memtable tr.hot td { background: var(--hl); color: var(--hl-ink); }
+  .memtable tr.target td { box-shadow: inset 0 0 0 2px var(--ink); }
+  .memtable .ptr { font-weight: 700; }
+  .mem-arrows { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+  .mem-arrows path { fill: none; stroke: var(--ink); stroke-width: 1.8; }
+  .mem-arrows path.head { fill: var(--ink); stroke: none; }
+  .mem-msg { font: .95rem var(--sans); margin: 0 0 .6rem; min-height: 2.8em; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 4: Computer systems, lesson 1 of 6</div>
+    <h1>C and pointers</h1>
+    <p class="lede">Python hides memory from you: names point at objects, and you never see an address. C shows you everything. This stage uses C to look at what's really happening underneath every program, starting with the idea that trips up everyone at first: the pointer.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="mem-title">
+    <h2 id="mem-title" style="margin-top:0;font-size:1.25rem">Watch a pointer move through memory</h2>
+    <div class="try">Step through the C program. The table is the memory it uses, with each variable's address; the arrow shows where the pointer <code>p</code> points.</div>
+    <div class="memgrid">
+      <ol class="tr-code" id="mem-code"></ol>
+      <div class="memtable" id="mem-table"></div>
+    </div>
+    <p class="mem-msg" id="mem-msg" aria-live="polite"></p>
+    <div class="tr-controls">
+      <button class="btn quiet" type="button" id="mem-back">Back</button>
+      <button class="btn" type="button" id="mem-next">Next line</button>
+      <span class="tr-count" id="mem-count"></span>
+    </div>
+  </section>
+  <p>The addresses here are simplified (real ones look like <code>0x7ffd5a3c</code>), but the layout and the arithmetic are exactly what a real 64-bit machine does. Compiled and run, the program prints <code>7 99 20</code>.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain why C is still everywhere, and how it differs from Python.</li>
+      <li>Give the sizes of C's basic types on a 64-bit machine.</li>
+      <li>Use <code>&amp;</code> and <code>*</code> to take addresses and follow pointers.</li>
+      <li>Do pointer arithmetic, and explain why <code>arr[i]</code> is <code>*(arr + i)</code>.</li>
+      <li>Explain C strings, and why pointers make buffer overflows and null crashes possible.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#why">Why C</a></li>
+      <li><a href="#types">Types have sizes</a></li>
+      <li><a href="#pointers">Addresses and pointers</a></li>
+      <li><a href="#arrays">Arrays and pointer arithmetic</a></li>
+      <li><a href="#functions">Pointers and functions</a></li>
+      <li><a href="#strings">Strings, and what goes wrong</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="why">Why C</h2>
+  <p>C was created by Dennis Ritchie at Bell Labs in the early 1970s to write the Unix operating system, and it's still the language of the layers everything else stands on: the Linux, Windows, and macOS kernels, the CPython interpreter you've been using, SQLite and PostgreSQL, and the firmware in cars and appliances. It's popular there because it maps almost directly onto the machine from stage 1. A C variable is a few bytes at an address; a C operation is a few instructions.</p>
+  <p>That closeness has a cost. C doesn't check array bounds, doesn't manage memory for you, and doesn't stop you from reading memory you shouldn't. CMU's 15-213 and Berkeley's CS61C teach it for the same reason this stage does: it shows you what the higher-level languages are doing on your behalf.</p>
+<pre><code>#include &lt;stdio.h&gt;
+
+int main(void) {
+    int count = 3;                 // every variable has a fixed type
+    for (int i = 0; i &lt; count; i++) {
+        printf("hello %d\n", i);
+    }
+    return 0;
+}</code></pre>
+  <p>Unlike Python, C is compiled ahead of time to machine code (lesson 5 covers how), and the types are fixed when you write the program.</p>
+
+  <!-- 2 -->
+  <h2 id="types">Types have sizes</h2>
+  <p>In C, a type tells the compiler how many bytes a value takes and how to interpret them. On a typical 64-bit machine:</p>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Type</th><th>Bytes</th><th>Holds</th></tr></thead>
+    <tbody>
+      <tr><td><code>char</code></td><td>1</td><td>one byte: a small integer or one ASCII character</td></tr>
+      <tr><td><code>int</code></td><td>4</td><td>a 32-bit two's complement integer (stage 1, lesson 1)</td></tr>
+      <tr><td><code>long</code></td><td>8 on Linux and macOS, 4 on Windows</td><td>a larger integer</td></tr>
+      <tr><td><code>double</code></td><td>8</td><td>a 64-bit floating-point number</td></tr>
+      <tr><td><code>int *</code> (any pointer)</td><td>8</td><td>a memory address</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The <code>sizeof</code> operator gives the size in bytes: <code>sizeof(int)</code> is 4. Sizes aren't fully fixed by the C standard, which is why <code>long</code> differs between systems, and why careful code uses types like <code>int32_t</code> and <code>int64_t</code> when the exact size matters. Remember that a C <code>int</code> can overflow, unlike a Python int.</p>
+
+  <!-- 3 -->
+  <h2 id="pointers">Addresses and pointers</h2>
+  <p>Every variable lives at some address in memory. The <code>&amp;</code> operator gives you that address, and a <span class="hl">pointer</span> is a variable that holds one. The <code>*</code> operator <em>dereferences</em> a pointer: it goes to the address and reads or writes what's there.</p>
+<pre><code>int x = 42;
+int *p = &amp;x;     // p holds the address of x. "int *" means "pointer to an int".
+*p = 7;          // go to the address in p, and store 7 there. x is now 7.</code></pre>
+  <p>This is the same idea as Python names pointing at objects (stage 1, lesson 4), with the arrow made visible and editable. Step through the panel's first four lines to see it.</p>
+
+  <div class="problem" data-id="ptr-p1" data-answer="8|eight">
+    <span class="qtag">Practice 1</span>
+    <p class="q">On a 64-bit machine, how many bytes does a pointer take, whatever it points to?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>A pointer holds an address. How wide are addresses on a 64-bit machine?</details>
+    <div class="solution" hidden><p><strong>8</strong> bytes (64 bits). A <code>char *</code>, an <code>int *</code>, and a <code>double *</code> are all 8 bytes; the type only tells the compiler what to expect at the address.</p></div>
+  </div>
+
+  <div class="mcq" data-id="ptr-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">After <code>int x = 42; int *p = &amp;x;</code>, what does <code>*p = 7;</code> do?</p>
+    <div class="choices">
+      <button type="button" data-why="That's p = 7, without the star, which would make p hold the (meaningless) address 7.">Makes p point to address 7</button>
+      <button type="button">Stores 7 in x, by going to the address p holds</button>
+      <button type="button" data-why="Multiplication needs two operands. Here * is the dereference operator.">Multiplies p by 7</button>
+      <button type="button" data-why="p still holds x's address; only the value at that address changes.">Creates a new variable holding 7</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>The star means "the thing at this address". <code>*p = 7</code> writes 7 into <strong>x</strong>, so afterward <code>x</code> is 7 and <code>p</code> is unchanged.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="arrays">Arrays and pointer arithmetic</h2>
+  <p>A C array is exactly the array from stage 3: items side by side in one block. The array's name, used in an expression, turns into a pointer to its first item. And adding 1 to a pointer moves it forward by <em>one item</em>, not one byte: <code>p + 1</code> on an <code>int *</code> adds 4 to the address, on a <code>double *</code> it adds 8. So indexing is just arithmetic:</p>
+<pre><code>arr[i]  is defined as  *(arr + i)
+// address of arr[i] = address of arr + i × sizeof(int)</code></pre>
+  <p>That's the formula from the arrays lesson, built into the language. Step through the rest of the panel: <code>p = arr</code> aims <code>p</code> at <code>arr[0]</code>, <code>p = p + 2</code> moves it two ints (8 bytes) along, and <code>*p = 99</code> overwrites <code>arr[2]</code>.</p>
+
+  <div class="problem" data-id="ptr-p2" data-answer="0x100c|100c|0x100C|4108">
+    <span class="qtag">Practice 2</span>
+    <p class="q">An <code>int</code> array <code>arr</code> starts at address 0x1000. What is the address of <code>arr[3]</code>? (Answer in hex, like 0x1004.)</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>3 ints × 4 bytes = 12 bytes, and 12 in hex is C.</details>
+    <div class="solution" hidden><p>0x1000 + 12 = <strong>0x100C</strong>. In code: <code>&amp;arr[3] == arr + 3</code>.</p></div>
+  </div>
+
+  <div class="mcq" data-id="ptr-q2" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">A <code>double *d</code> holds address 0x2000. What address does <code>d + 1</code> hold?</p>
+    <div class="choices">
+      <button type="button" data-why="Pointer arithmetic counts in items, not bytes.">0x2001</button>
+      <button type="button" data-why="That would be an int pointer. A double is bigger.">0x2004</button>
+      <button type="button">0x2008</button>
+      <button type="button" data-why="That's two doubles along.">0x2010</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>One double is 8 bytes, so <code>d + 1</code> is <strong>0x2008</strong>. That's why pointers have types: the compiler needs the item size to do the arithmetic.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="functions">Pointers and functions</h2>
+  <p>C passes every argument <em>by value</em>: the function gets a copy. So this swap does nothing to the caller's variables:</p>
+  <div class="side">
+<pre><code>void swap(int a, int b) {   // copies
+    int t = a; a = b; b = t;
+}
+swap(x, y);    // x and y unchanged</code></pre>
+<pre><code>void swap(int *a, int *b) { // addresses
+    int t = *a; *a = *b; *b = t;
+}
+swap(&amp;x, &amp;y);  // x and y swapped</code></pre>
+  </div>
+  <p>Passing addresses lets a function change the caller's variables, and it avoids copying big structures: pass an 8-byte pointer instead of a 1 MB array. In fact, an array passed to a function always arrives as a pointer to its first item. That's why C functions that take arrays also take their length: the function can't find it out.</p>
+
+  <div class="mcq" data-id="ptr-q3" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">Why does the left-hand <code>swap</code> fail?</p>
+    <div class="choices">
+      <button type="button">It swaps its own copies of the values; the caller's variables are never touched</button>
+      <button type="button" data-why="The swap logic with a temporary is correct.">The three-line swap logic is wrong</button>
+      <button type="button" data-why="It returns nothing because it's void, but that isn't the problem; the copies are.">It forgets to return the swapped values</button>
+      <button type="button" data-why="C allows ints as parameters; it compiles and runs, it just has no effect.">C doesn't allow int parameters</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>Arguments are <strong>copied</strong>. The pointer version passes copies too, but copies of addresses, and both copies lead to the same variables.</p></div>
+  </div>
+
+  <!-- 6 -->
+  <h2 id="strings">Strings, and what goes wrong</h2>
+  <p>C has no string type. A string is an array of <code>char</code> that ends with a zero byte, written <code>'\0'</code>, which marks the end. <code>char s[] = "hello"</code> takes 6 bytes: five letters and the terminator. Finding a string's length means walking until the zero, so <code>strlen</code> is O(n). That's exactly what made GTA Online's loading quadratic in lesson 1 of stage 3.</p>
+
+  <div class="problem" data-id="ptr-p3" data-answer="6|six">
+    <span class="qtag">Practice 3</span>
+    <p class="q">How many bytes does <code>char s[] = "hello";</code> take?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Don't forget the end marker.</details>
+    <div class="solution" hidden><p><strong>6</strong>: five letters plus <code>'\0'</code>. <code>strlen(s)</code> is 5; <code>sizeof(s)</code> is 6. Forgetting the extra byte is a classic off-by-one bug.</p></div>
+  </div>
+
+  <p>Two dangers follow from all this. First, <strong>nothing checks bounds</strong>. <code>arr[5]</code> on a 4-item array just computes an address past the end and reads or writes whatever's there. That's <em>undefined behavior</em>: the program might crash, might seem fine, or might be quietly corrupting other data. Copying a long string into a short array this way is a <span class="hl">buffer overflow</span>, the bug behind the Morris worm in stage 1. Second, a pointer can be <code>NULL</code>, the address 0, meaning "points nowhere", and dereferencing it crashes the program.</p>
+
+  <div class="mcq" data-id="ptr-q4" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">In C, what happens when you write to <code>arr[10]</code> on a 4-item array?</p>
+    <div class="choices">
+      <button type="button" data-why="C has no bounds checking; that's Python's IndexError.">An IndexError is raised</button>
+      <button type="button" data-why="C arrays can't grow.">The array grows to 11 items</button>
+      <button type="button" data-why="Most compilers won't catch this, especially when the index is computed at run time.">The compiler always refuses to build it</button>
+      <button type="button">Undefined behavior: it writes to whatever memory is there</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Undefined behavior.</strong> It computes <code>arr + 10</code> and writes there, possibly over another variable or a return address. Tools like AddressSanitizer (<code>gcc -fsanitize=address</code>) catch these during testing, and memory-safe languages like Rust check at compile time.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>The billion-dollar mistake</h3>
+    <p>In 1965, Tony Hoare was designing the type system for a language called ALGOL W and added the null reference, "simply because it was so easy to implement." It spread into C, C++, Java, C#, JavaScript, and Python (as <code>None</code>). In a 2009 talk he called it his "billion-dollar mistake", estimating the cost of the crashes, vulnerabilities, and debugging it had caused over 40 years. Newer languages like Rust, Swift, and Kotlin make "might be missing" part of a value's type, so the compiler forces you to check before you use it.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>C maps closely to the machine: variables are bytes at addresses, and types fix their sizes.</li>
+    <li><code>&amp;x</code> is x's address; a pointer holds an address; <code>*p</code> is the thing it points at.</li>
+    <li>Pointer arithmetic counts in items: <code>arr[i]</code> is <code>*(arr + i)</code>.</li>
+    <li>C passes copies. Pass a pointer to let a function change the caller's data.</li>
+    <li>Strings end with <code>'\0'</code>. Nothing checks bounds or null: that's where C's worst bugs come from.</li>
+  </ul>
+
+  <h3>Try it yourself</h3>
+  <p>Save this as <code>ptr.c</code>, then build and run it with <code>gcc ptr.c -o ptr</code> and <code>./ptr</code> (on Windows, install GCC through MSYS2, or paste it into Compiler Explorer or Python Tutor's C mode):</p>
+<pre><code>#include &lt;stdio.h&gt;
+
+int main(void) {
+    int arr[4] = {10, 20, 30, 40};
+    for (int i = 0; i &lt; 4; i++)
+        printf("arr[%d] = %d at address %p\n", i, arr[i], (void *)&amp;arr[i]);
+    return 0;      // the addresses go up by 4 each time
+}</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 1</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="c-pointers">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>The stack and the heap</strong>: where a program's memory comes from, and who cleans it up.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.cs.cmu.edu/~213/" target="_blank" rel="noopener">CMU 15-213: Introduction to Computer Systems</a><span>The course this stage follows most closely. Its C review and data lectures cover sizes, pointers, and arrays.</span></li>
+      <li><a href="https://cs61c.org/" target="_blank" rel="noopener">Berkeley CS61C: Great Ideas in Computer Architecture</a><span>Its first weeks teach C, pointers, and memory management.</span></li>
+      <li><a href="https://beej.us/guide/bgc/" target="_blank" rel="noopener">Beej's Guide to C Programming</a><span>A free, friendly, complete introduction to C, including a good chapter on pointers.</span></li>
+      <li><a href="https://en.cppreference.com/w/c/language/pointer" target="_blank" rel="noopener">cppreference: Pointer declaration (C)</a><span>The precise rules, when you need them.</span></li>
+      <li><a href="https://pythontutor.com/c.html" target="_blank" rel="noopener">Python Tutor for C</a><span>Step through your own C programs and see pointers drawn as arrows.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/The_C_Programming_Language" target="_blank" rel="noopener">The C Programming Language (Wikipedia)</a><span>About "K&amp;R", the classic 1978 book by Kernighan and Ritchie.</span></li>
+      <li><a href="https://www.infoq.com/presentations/Null-References-The-Billion-Dollar-Mistake-Tony-Hoare/" target="_blank" rel="noopener">Tony Hoare: Null references, the billion dollar mistake</a><span>The 2009 talk, with video.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Memory stepper: the program's variables at simplified addresses, one state per line.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const CODE = ['int x = 42;', 'int arr[4] = {10, 20, 30, 40};', 'int *p = &x;', '*p = 7;', 'p = arr;', 'p = p + 2;', '*p = 99;', 'printf("%d %d %d\\n", x, arr[2], *(arr + 1));'];
+    // Memory rows: [address, name, value-key]
+    const ROWS = [['0x1000', 'x', 'x'], ['0x1004', 'arr[0]', 'a0'], ['0x1008', 'arr[1]', 'a1'], ['0x100C', 'arr[2]', 'a2'], ['0x1010', 'arr[3]', 'a3'], ['0x1018', 'p', 'p']];
+    const ADDR = { '0x1000': 0, '0x1004': 1, '0x1008': 2, '0x100C': 3, '0x1010': 4 };
+    const S = [
+      { line: 0, v: {}, msg: 'Press Next line to run the first line.' },
+      { line: 1, v: { x: 42 }, hot: 'x', msg: 'x gets 4 bytes at 0x1000 and holds 42.' },
+      { line: 2, v: { x: 42, a0: 10, a1: 20, a2: 30, a3: 40 }, hot: 'a0', msg: 'arr gets 16 bytes: four ints side by side, at 0x1004, 0x1008, 0x100C, and 0x1010.' },
+      { line: 3, v: { x: 42, a0: 10, a1: 20, a2: 30, a3: 40, p: '0x1000' }, hot: 'p', msg: 'p is 8 bytes holding an address: &x is 0x1000. p now points at x. (p sits at 0x1018, not 0x1014, because 8-byte values are kept at addresses divisible by 8. That’s called alignment.)' },
+      { line: 4, v: { x: 7, a0: 10, a1: 20, a2: 30, a3: 40, p: '0x1000' }, hot: 'x', msg: '*p means "the int at the address in p". That’s x, so x becomes 7. p itself didn’t change.' },
+      { line: 5, v: { x: 7, a0: 10, a1: 20, a2: 30, a3: 40, p: '0x1004' }, hot: 'p', msg: 'The name arr turns into the address of its first item, 0x1004. p now points at arr[0].' },
+      { line: 6, v: { x: 7, a0: 10, a1: 20, a2: 30, a3: 40, p: '0x100C' }, hot: 'p', msg: 'p + 2 moves two ints along: 2 × 4 = 8 bytes, from 0x1004 to 0x100C. p now points at arr[2].' },
+      { line: 7, v: { x: 7, a0: 10, a1: 20, a2: 99, a3: 40, p: '0x100C' }, hot: 'a2', msg: '*p = 99 writes at 0x100C, which is arr[2].' },
+      { line: 8, v: { x: 7, a0: 10, a1: 20, a2: 99, a3: 40, p: '0x100C' }, msg: '*(arr + 1) is arr[1], which is 20. The program prints: 7 99 20' },
+    ];
+    let i = 0;
+    $('mem-code').innerHTML = CODE.map(l => `<li><code>${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code></li>`).join('');
+    $('mem-table').innerHTML = `<table><thead><tr><th>Address</th><th>Name</th><th>Value</th></tr></thead><tbody>${ROWS.map(r => `<tr data-k="${r[2]}"><td>${r[0]}</td><td>${r[1]}</td><td></td></tr>`).join('')}</tbody></table><svg class="mem-arrows" aria-hidden="true"></svg>`;
+    const rows = [...$('mem-table').querySelectorAll('tbody tr')];
+
+    function render() {
+      const s = S[i], target = s.v.p ? ADDR[s.v.p] : -1;
+      [...$('mem-code').children].forEach((li, k) => li.classList.toggle('now', k + 1 === s.line));
+      rows.forEach((tr, k) => {
+        const key = tr.dataset.k, val = s.v[key];
+        tr.cells[2].innerHTML = val === undefined ? '' : key === 'p' ? `<span class="ptr">${val}</span>` : val;
+        tr.classList.toggle('hot', s.hot === key);
+        tr.classList.toggle('target', k === target);
+      });
+      // Arrow from p's row to the row it points at, through a gutter on the right.
+      const svg = $('mem-table').querySelector('svg'), box = $('mem-table').getBoundingClientRect();
+      svg.innerHTML = '';
+      if (target >= 0) {
+        const a = rows[5].getBoundingClientRect(), b = rows[target].getBoundingClientRect();
+        const y1 = a.top + a.height / 2 - box.top, y2 = b.top + b.height / 2 - box.top, x1 = a.right - box.left, gx = x1 + 18;
+        svg.innerHTML = `<path d="M${x1},${y1} H${gx} V${y2} H${x1 + 9}"/><path class="head" d="M${x1 + 9},${y2 - 5} L${x1},${y2} L${x1 + 9},${y2 + 5} Z"/>`;
+      }
+      $('mem-msg').textContent = s.msg;
+      $('mem-count').textContent = `Line ${s.line} of ${CODE.length}`;
+      $('mem-back').disabled = i === 0;
+      $('mem-next').disabled = i === S.length - 1;
+    }
+    $('mem-back').onclick = () => { i = Math.max(0, i - 1); render(); };
+    $('mem-next').onclick = () => { i = Math.min(S.length - 1, i + 1); render(); };
+    new ResizeObserver(render).observe($('mem-table'));
+    render();
+  })();
+</script>
+</body>
+</html>
