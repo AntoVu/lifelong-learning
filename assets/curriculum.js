@@ -47,7 +47,7 @@ window.CURRICULUM = [
     sources: ['CMU 15-213', 'Berkeley CS61C'],
     lessons: [
       { id: 'c-pointers', title: 'C and pointers', href: 'lessons/19-c-and-pointers.html', minutes: 45 },
-      { id: 'memory', title: 'The stack and the heap' },
+      { id: 'memory', title: 'The stack and the heap', href: 'lessons/20-stack-and-heap.html', minutes: 40 },
       { id: 'caches', title: 'The memory hierarchy and caches' },
       { id: 'assembly', title: 'Reading assembly' },
       { id: 'linking', title: 'From source code to running program' },

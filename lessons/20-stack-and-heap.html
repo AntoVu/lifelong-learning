@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The stack and the heap | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .sh-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin: .8rem 0 .6rem; }
+  @media (max-width: 700px) { .sh-grid { grid-template-columns: 1fr; } }
+  .regions { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+  .regions h4 { font: 600 .8rem var(--sans); color: var(--ink-2); margin: 0 0 .3rem; }
+  .frame { border: 1.5px solid var(--rule); border-radius: 6px; padding: .35rem .5rem; margin-bottom: .35rem; background: var(--paper); font: .82rem var(--mono); }
+  .frame.top { border-color: var(--ink); }
+  .frame b { display: block; font: 700 .82rem var(--mono); margin-bottom: .15rem; }
+  .frame .v { display: flex; justify-content: space-between; gap: .4rem; }
+  .frame .v.hot { background: var(--hl); color: var(--hl-ink); border-radius: 3px; }
+  .block { border: 1.5px solid var(--ink); border-radius: 6px; padding: .35rem .5rem; background: var(--panel); font: .82rem var(--mono); }
+  .block.freed { border-style: dashed; border-color: var(--pencil); color: var(--pencil); background: transparent; }
+  .block .cells { display: flex; gap: 2px; margin-top: .25rem; }
+  .block .cells span { flex: 1; text-align: center; border: 1px solid var(--rule); padding: .1rem 0; }
+  .block .cells span.hot { background: var(--hl); color: var(--hl-ink); }
+  .empty-note { font: .8rem var(--sans); color: var(--pencil); }
+  .sh-msg { font: .95rem var(--sans); margin: 0 0 .6rem; min-height: 2.8em; }
+  .sh-out { font: .9rem var(--mono); margin: .2rem 0 0; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 4: Computer systems, lesson 2 of 6</div>
+    <h1>The stack and the heap</h1>
+    <p class="lede">Every variable needs memory, but not every variable needs it for the same amount of time. A loop counter lives for one function call; a list of users might live for the whole program. Running programs keep those two kinds in two different places, the stack and the heap. Knowing which is which explains a whole family of bugs.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="sh-title">
+    <h2 id="sh-title" style="margin-top:0;font-size:1.25rem">Follow a program's memory</h2>
+    <div class="try">Step through. Function calls push frames onto the stack and pop them on return. <code>malloc</code> carves a block out of the heap that stays until <code>free</code>.</div>
+    <div class="sh-grid">
+      <ol class="tr-code" id="sh-code"></ol>
+      <div class="regions">
+        <div><h4>Stack (newest frame on top)</h4><div id="sh-stack"></div></div>
+        <div><h4>Heap</h4><div id="sh-heap"></div><p class="sh-out" id="sh-out"></p></div>
+      </div>
+    </div>
+    <p class="sh-msg" id="sh-msg" aria-live="polite"></p>
+    <div class="tr-controls">
+      <button class="btn quiet" type="button" id="sh-back">Back</button>
+      <button class="btn" type="button" id="sh-next">Next step</button>
+      <span class="tr-count" id="sh-count"></span>
+    </div>
+  </section>
+  <p>Notice what happens when <code>make_array</code> returns: its frame, including the pointer <code>a</code>, disappears from the stack, but the block it allocated stays on the heap, because <code>main</code> still needs it. Then notice the last step: after <code>free</code>, <code>squares</code> still holds the old address. That's a dangling pointer.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Sketch a process's memory: code, globals, heap, and stack.</li>
+      <li>Explain what lives on the stack, why it's fast, and why it disappears on return.</li>
+      <li>Allocate and free heap memory in C with <code>malloc</code> and <code>free</code>.</li>
+      <li>Name the classic memory bugs: leaks, dangling pointers, double frees, and overflows.</li>
+      <li>Explain how Python, Java, and Rust manage memory without manual <code>free</code>.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#map">A program's memory map</a></li>
+      <li><a href="#stack">The stack</a></li>
+      <li><a href="#heap">The heap</a></li>
+      <li><a href="#bugs">Memory bugs</a></li>
+      <li><a href="#auto">Letting the language manage it</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="map">A program's memory map</h2>
+  <p>When the operating system starts a program, it gives the new <em>process</em> its own range of addresses and divides it into regions:</p>
+  <figure class="figure">
+    <svg viewBox="0 0 520 300" role="img" aria-labelledby="mm-t" style="max-width:560px">
+      <title id="mm-t">A process's memory, from high addresses at the top to low at the bottom: the stack, which grows downward; free space; the heap, which grows upward; global data; and the program's code.</title>
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/></marker></defs>
+      <rect x="60" y="20" width="220" height="56" fill="var(--hl)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="170" y="44" class="glabel" text-anchor="middle" fill="#1b2a41">Stack</text>
+      <text x="170" y="62" class="gsmall" text-anchor="middle" style="fill:#1b2a41">local variables, return addresses</text>
+      <rect x="60" y="76" width="220" height="90" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="170" y="125" class="gsmall" text-anchor="middle">unused, room to grow</text>
+      <rect x="60" y="166" width="220" height="50" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="170" y="188" class="glabel" text-anchor="middle">Heap</text>
+      <text x="170" y="205" class="gsmall" text-anchor="middle">malloc'd blocks, Python objects</text>
+      <rect x="60" y="216" width="220" height="36" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="170" y="239" class="gsmall" text-anchor="middle">Global and static variables</text>
+      <rect x="60" y="252" width="220" height="36" fill="var(--code-bg)" stroke="var(--ink)" stroke-width="2"/>
+      <text x="170" y="275" class="gsmall" text-anchor="middle">Code: the machine instructions</text>
+      <line x1="300" y1="50" x2="300" y2="100" stroke="var(--ink)" stroke-width="2" marker-end="url(#arr)"/>
+      <text x="312" y="80" class="gsmall">grows down</text>
+      <line x1="300" y1="196" x2="300" y2="146" stroke="var(--ink)" stroke-width="2" marker-end="url(#arr)"/>
+      <text x="312" y="174" class="gsmall">grows up</text>
+      <text x="20" y="30" class="gsmall">high</text>
+      <text x="20" y="286" class="gsmall">low</text>
+      <text x="330" y="260" class="gsmall">addresses</text>
+    </svg>
+    <figcaption>The classic layout, as on Linux. Real systems shuffle the exact positions each run (a defense called address space layout randomization), but every process has these regions.</figcaption>
+  </figure>
+
+  <!-- 2 -->
+  <h2 id="stack">The stack</h2>
+  <p>You met the call stack in stage 1: one <em>frame</em> per active function call, holding its parameters, local variables, and the return address. In memory, it's one contiguous region, and a CPU register (the <em>stack pointer</em>) marks its top. Calling a function moves the pointer to make room for a frame; returning moves it back. That makes stack allocation almost free, a single subtraction, and cleanup automatic.</p>
+  <p>The catch is in "automatic". When a function returns, its frame is gone, and the next call reuses that memory. So a pointer to a local variable is only valid while its function is running:</p>
+<pre><code>int *broken(void) {
+    int x = 42;
+    return &amp;x;          // x's frame is about to be reused: this address is garbage
+}</code></pre>
+  <p>The stack is also small, typically 8 MB on Linux and 1 MB on Windows for the main thread. A huge local array, or recursion that goes too deep, runs off the end: a <em>stack overflow</em>.</p>
+
+  <div class="mcq" data-id="heap-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">What's wrong with <code>broken()</code> above?</p>
+    <div class="choices">
+      <button type="button" data-why="Returning a pointer is fine in general; the problem is what this pointer points to.">Functions can't return pointers in C</button>
+      <button type="button" data-why="42 is a perfectly good int.">x isn't initialized</button>
+      <button type="button">It returns the address of a local variable whose frame disappears when the function returns</button>
+      <button type="button" data-why="The pointer itself is copied back safely; the target is the issue.">The returned pointer is too big to copy</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>It returns a <strong>dangling pointer</strong> into a dead frame. Compilers warn about this one ("function returns address of local variable"). The fix is to allocate on the heap, as <code>make_array</code> does, or to let the caller pass in the memory.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="heap">The heap</h2>
+  <p>For memory that must outlive a function call, or whose size you only learn while running, C uses the <span class="hl">heap</span>. <code>malloc(n)</code> asks for n bytes and returns a pointer to them; the block stays yours until you call <code>free</code> on it:</p>
+<pre><code>int *make_array(int n) {
+    int *a = malloc(n * sizeof(int));   // n ints on the heap
+    for (int i = 0; i &lt; n; i++)
+        a[i] = i * i;
+    return a;                           // fine: the block outlives this frame
+}
+...
+free(squares);                          // the caller gives it back when done</code></pre>
+  <p>Behind <code>malloc</code> is an <em>allocator</em>, library code that keeps track of which parts of the heap are in use and asks the operating system for more when needed. It's much slower than moving a stack pointer, and over time free blocks can end up scattered in small pieces (fragmentation). Despite the name, this "heap" has nothing to do with the heap data structure from stage 3.</p>
+
+  <div class="problem" data-id="heap-p1" data-answer="16|sixteen">
+    <span class="qtag">Practice 1</span>
+    <p class="q">How many bytes does <code>malloc(n * sizeof(int))</code> request when n is 4?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>An int is 4 bytes.</details>
+    <div class="solution" hidden><p>4 × 4 = <strong>16</strong>. <code>malloc</code> only counts bytes, so you have to multiply by the item size yourself. Forgetting <code>sizeof</code> is a classic way to allocate a quarter of what you need.</p></div>
+  </div>
+
+  <div class="problem" data-id="heap-p2" data-answer="14|fourteen">
+    <span class="qtag">Practice 2</span>
+    <p class="q">What does the panel's program print?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The array holds i × i for i = 0, 1, 2, 3.</details>
+    <div class="solution" hidden><p>0 + 1 + 4 + 9 = <strong>14</strong>. <code>sum</code> reads the heap block through the pointer it was given, without copying the array.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="bugs">Memory bugs</h2>
+  <p>Manual memory management gives C its speed and its most famous bugs:</p>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Bug</th><th>What happens</th><th>Typical result</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Leak</strong></td><td>You lose the last pointer to a block without freeing it</td><td>Memory use creeps up until the program is killed</td></tr>
+      <tr><td><strong>Use after free</strong></td><td>You use a dangling pointer to a freed block</td><td>Reads or corrupts whatever reuses that memory; often exploitable</td></tr>
+      <tr><td><strong>Double free</strong></td><td>You free the same block twice</td><td>Corrupts the allocator's bookkeeping</td></tr>
+      <tr><td><strong>Overflow / over-read</strong></td><td>You write or read past the end of a block</td><td>Corrupts neighbors, or leaks secrets (see Heartbleed below)</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>These aren't rare. Microsoft and the Chrome team have each reported that about 70% of their serious security bugs are memory safety problems like these. Tools catch many of them in testing: Valgrind and AddressSanitizer watch every memory access while your program runs and report the line that went wrong.</p>
+
+  <div class="mcq" data-id="heap-q2" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">A server calls <code>malloc</code> for every request but sometimes forgets to <code>free</code>. What happens over days of uptime?</p>
+    <div class="choices">
+      <button type="button">A memory leak: its memory use keeps growing until it runs out or is restarted</button>
+      <button type="button" data-why="C has no garbage collector; nothing reclaims the blocks automatically.">Nothing; the memory is reclaimed automatically</button>
+      <button type="button" data-why="That's a stack overflow, from deep recursion or huge locals. Leaks are on the heap.">A stack overflow</button>
+      <button type="button" data-why="Leaks waste memory but don't corrupt data directly.">The data in other requests gets corrupted</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>A <strong>leak</strong>. The memory is only returned when the process exits, which is why "restart it every night" is a real (if embarrassing) fix for leaky services.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="auto">Letting the language manage it</h2>
+  <p>Most languages take <code>free</code> out of your hands:</p>
+  <ul>
+    <li><strong>Python</strong> puts every object on the heap and keeps a <em>reference count</em> in each one: how many names and containers point at it. When the count drops to zero, the memory is freed immediately. A separate cycle collector cleans up groups of objects that only point at each other.</li>
+    <li><strong>Java, C#, Go, and JavaScript</strong> use a <span class="hl">garbage collector</span> that periodically finds every object still reachable from the program's variables and frees the rest. You never free anything, at the cost of some extra memory and occasional pauses.</li>
+    <li><strong>Rust</strong> checks ownership rules at compile time, so every block has exactly one owner and is freed when the owner goes out of scope. No collector, and no use-after-free; the compiler rejects the program instead.</li>
+  </ul>
+  <p>That's why the dangling pointer from the panel can't happen in Python: as long as <code>squares</code> refers to the list, the list can't be freed.</p>
+
+  <div class="mcq" data-id="heap-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">In Python, when is a list's memory freed?</p>
+    <div class="choices">
+      <button type="button" data-why="Python has no free function for ordinary objects.">When you call free() on it</button>
+      <button type="button" data-why="Objects can outlive the function that created them, as long as something still refers to them.">When the function that created it returns</button>
+      <button type="button" data-why="Python frees most objects right away, not only at exit.">Only when the program exits</button>
+      <button type="button">When nothing refers to it any more (its reference count reaches zero)</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>When the last reference goes away.</strong> <code>sys.getrefcount(x)</code> shows the count (one higher than you'd expect, because passing <code>x</code> to the function adds a temporary reference).</p></div>
+  </div>
+
+  <div class="problem" data-id="heap-p3" data-answer="65535|65,535|64kb|64k">
+    <span class="qtag">Practice 3</span>
+    <p class="q">In the Heartbleed story below, the request's length field was 16 bits. What's the largest length an attacker could ask for?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Stage 1, lesson 1: the largest unsigned value in n bits is 2ⁿ − 1.</details>
+    <div class="solution" hidden><p>2¹⁶ − 1 = <strong>65,535</strong> bytes, about 64 KB of server memory per request, and an attacker could send as many requests as they liked.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>Heartbleed, 2014</h3>
+    <p>OpenSSL, the library that encrypted a large share of the web's traffic, supported a "heartbeat": the client sends a few bytes and a number saying how long they are, and the server echoes them back to show the connection is alive. The code trusted the number. Send 1 byte but claim 64 KB, and the server copied 64 KB starting at your byte, a buffer over-read, sending back whatever was next to it on the heap: session cookies, passwords, even the server's private keys. The bug sat in OpenSSL for two years before its disclosure on April 7, 2014, when about 17% of the internet's secure web servers, around half a million, were vulnerable. The fix was a single bounds check.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>A process has code, globals, a heap that grows up, and a stack that grows down.</li>
+    <li>The stack holds frames: fast, automatic, small, and gone when the function returns.</li>
+    <li>The heap holds data that must outlive a call: <code>malloc</code> to get it, <code>free</code> to return it.</li>
+    <li>Leaks, use-after-free, double frees, and overflows cause most serious security bugs in C and C++.</li>
+    <li>Python counts references, Java and Go collect garbage, and Rust checks ownership at compile time.</li>
+  </ul>
+
+  <h3>Try it yourself</h3>
+  <p>Watch Python's reference counts move:</p>
+<pre><code>import sys
+
+data = [1, 2, 3]
+print(sys.getrefcount(data))   # 2: the name data, plus the temporary argument
+alias = data
+print(sys.getrefcount(data))   # 3: alias refers to the same list
+del alias
+print(sys.getrefcount(data))   # 2 again</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 2</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="memory">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>The memory hierarchy and caches</strong>: why the same loop can run ten times faster just by visiting memory in a different order.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.cs.cmu.edu/~213/" target="_blank" rel="noopener">CMU 15-213: Introduction to Computer Systems</a><span>The machine-level procedures and dynamic memory allocation lectures, and the malloc lab, where you write your own allocator.</span></li>
+      <li><a href="https://cs61c.org/" target="_blank" rel="noopener">Berkeley CS61C</a><span>C memory management: the stack, the heap, and common bugs.</span></li>
+      <li><a href="https://beej.us/guide/bgc/html/split/manual-memory-allocation.html" target="_blank" rel="noopener">Beej's Guide to C: Manual memory allocation</a><span>malloc, calloc, realloc, and free, with examples.</span></li>
+      <li><a href="https://clang.llvm.org/docs/AddressSanitizer.html" target="_blank" rel="noopener">AddressSanitizer</a><span>The compiler tool that catches use-after-free, overflows, and leaks while you test.</span></li>
+      <li><a href="https://www.chromium.org/Home/chromium-security/memory-safety/" target="_blank" rel="noopener">Chromium: Memory safety</a><span>The Chrome team's numbers on memory bugs, and what they're doing about them.</span></li>
+      <li><a href="https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html" target="_blank" rel="noopener">The Rust Book: What is ownership?</a><span>How Rust frees memory without a garbage collector, starting from the stack and the heap.</span></li>
+      <li><a href="https://heartbleed.com/" target="_blank" rel="noopener">The Heartbleed Bug</a><span>The original 2014 disclosure site, with a plain-language Q&amp;A.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Stack-and-heap stepper: scripted states for a small C program.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const CODE = [
+      'int *make_array(int n) {', '    int *a = malloc(n * sizeof(int));', '    for (int i = 0; i < n; i++) a[i] = i * i;', '    return a;', '}',
+      'int sum(int *a, int n) {', '    int total = 0;', '    for (int i = 0; i < n; i++) total += a[i];', '    return total;', '}',
+      'int main(void) {', '    int n = 4;', '    int *squares = make_array(n);', '    int s = sum(squares, n);', '    printf("%d\\n", s);', '    free(squares);', '    return 0;', '}',
+    ];
+    const B = (vals, freed) => ({ addr: '0x5000', vals, freed });
+    const S = [
+      { line: 11, stack: [['main', []]], heap: null, msg: 'The program starts in main. Its frame is the first one on the stack.' },
+      { line: 12, stack: [['main', [['n', '4', 1]]]], heap: null, msg: 'n is a local variable: it lives in main’s frame.' },
+      { line: 1, stack: [['main', [['n', '4'], ['squares', '?']]], ['make_array', [['n', '4', 1]]]], heap: null, msg: 'Calling make_array pushes a new frame with its own copy of n.' },
+      { line: 2, stack: [['main', [['n', '4'], ['squares', '?']]], ['make_array', [['n', '4'], ['a', '0x5000', 1]]]], heap: B(['?', '?', '?', '?']), msg: 'malloc reserves 16 bytes on the heap at 0x5000. Only the pointer a lives on the stack.' },
+      { line: 3, stack: [['main', [['n', '4'], ['squares', '?']]], ['make_array', [['n', '4'], ['a', '0x5000']]]], heap: B(['0', '1', '4', '9']), hotHeap: true, msg: 'The loop fills the heap block through the pointer: a[i] is *(a + i).' },
+      { line: 13, stack: [['main', [['n', '4'], ['squares', '0x5000', 1]]]], heap: B(['0', '1', '4', '9']), msg: 'make_array returned. Its frame, including a, is gone, but the heap block survives, and main now holds its address in squares.' },
+      { line: 7, stack: [['main', [['n', '4'], ['squares', '0x5000']]], ['sum', [['a', '0x5000'], ['n', '4'], ['total', '0', 1]]]], heap: B(['0', '1', '4', '9']), msg: 'sum gets a copy of the pointer, not a copy of the array. Both frames now point at the same block.' },
+      { line: 8, stack: [['main', [['n', '4'], ['squares', '0x5000']]], ['sum', [['a', '0x5000'], ['n', '4'], ['total', '14', 1]]]], heap: B(['0', '1', '4', '9']), hotHeap: true, msg: 'The loop reads all four heap values: total = 0 + 1 + 4 + 9 = 14.' },
+      { line: 14, stack: [['main', [['n', '4'], ['squares', '0x5000'], ['s', '14', 1]]]], heap: B(['0', '1', '4', '9']), msg: 'sum’s frame is popped; its return value lands in s.' },
+      { line: 15, stack: [['main', [['n', '4'], ['squares', '0x5000'], ['s', '14']]]], heap: B(['0', '1', '4', '9']), out: '14', msg: 'printf shows 14.' },
+      { line: 16, stack: [['main', [['n', '4'], ['squares', '0x5000 (dangling)', 1], ['s', '14']]]], heap: B(['0', '1', '4', '9'], true), out: '14', msg: 'free gives the block back to the allocator. But squares still holds 0x5000. Using it now would be a use-after-free bug. Careful code sets it to NULL.' },
+      { line: 17, stack: [], heap: B(['0', '1', '4', '9'], true), out: '14', msg: 'main returns, and the process exits. The operating system reclaims all of its memory.' },
+    ];
+    let i = 0;
+    $('sh-code').innerHTML = CODE.map(l => `<li><code>${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code></li>`).join('');
+    function render() {
+      const s = S[i];
+      [...$('sh-code').children].forEach((li, k) => li.classList.toggle('now', k + 1 === s.line));
+      $('sh-stack').innerHTML = s.stack.length ? s.stack.slice().reverse().map(([fn, vars], k) => `<div class="frame${k === 0 ? ' top' : ''}"><b>${fn}()</b>${vars.map(([n, v, hot]) => `<div class="v${hot ? ' hot' : ''}"><span>${n}</span><span>${v}</span></div>`).join('') || '<span class="empty-note">no variables yet</span>'}</div>`).join('') : '<p class="empty-note">empty</p>';
+      $('sh-heap').innerHTML = s.heap ? `<div class="block${s.heap.freed ? ' freed' : ''}">${s.heap.addr}: 16 bytes${s.heap.freed ? ' (freed)' : ''}<div class="cells">${s.heap.vals.map(v => `<span class="${s.hotHeap ? 'hot' : ''}">${v}</span>`).join('')}</div></div>` : '<p class="empty-note">nothing allocated</p>';
+      $('sh-out').textContent = s.out ? 'Output: ' + s.out : '';
+      $('sh-msg').textContent = s.msg;
+      $('sh-count').textContent = `Step ${i + 1} of ${S.length}`;
+      $('sh-back').disabled = i === 0;
+      $('sh-next').disabled = i === S.length - 1;
+    }
+    $('sh-back').onclick = () => { i = Math.max(0, i - 1); render(); };
+    $('sh-next').onclick = () => { i = Math.min(S.length - 1, i + 1); render(); };
+    render();
+  })();
+</script>
+</body>
+</html>
