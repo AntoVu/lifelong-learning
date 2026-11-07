@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The memory hierarchy and caches | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .cs-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.2rem; align-items: start; margin: .8rem 0 .4rem; }
+  @media (max-width: 700px) { .cs-grid { grid-template-columns: 1fr; } }
+  .mat { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; max-width: 320px; }
+  .mc { aspect-ratio: 1; display: grid; place-items: center; font: .62rem var(--mono); color: var(--pencil); background: var(--paper); border: 1px solid var(--rule); border-radius: 3px; }
+  .mc.lineA { border-left: 3px solid var(--ink-2); }
+  .mc.cached { background: #dbe8f5; }
+  .mc.hit { background: var(--hl); color: var(--hl-ink); font-weight: 700; }
+  .mc.miss { background: #e08a6d; color: #fff; font-weight: 700; }
+  .mc.done { color: var(--ink); }
+  @media (prefers-color-scheme: dark) { .mc.cached { background: #2b4563; } .mc.miss { background: #b0634c; } }
+  .cache-box h4 { font: 600 .85rem var(--sans); margin: 0 0 .3rem; }
+  .cline { font: .85rem var(--mono); padding: .25rem .5rem; border: 1.5px solid var(--ink); border-radius: 5px; margin-bottom: .3rem; background: var(--panel); }
+  .cline.empty { border-style: dashed; border-color: var(--pencil); color: var(--pencil); background: transparent; }
+  .cline.new { background: #e08a6d; color: #fff; }
+  .cline.used { background: var(--hl); color: var(--hl-ink); }
+  .cs-stats { display: flex; flex-wrap: wrap; gap: .3rem 1.4rem; font: .9rem var(--sans); margin: .6rem 0; }
+  .cs-stats b { font-family: var(--mono); }
+  .cs-msg { font: .95rem var(--sans); margin: 0 0 .6rem; min-height: 1.4em; }
+  .scale td:nth-child(2), .scale td:nth-child(3) { font-family: var(--mono); white-space: nowrap; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 4: Computer systems, lesson 3 of 6</div>
+    <h1>The memory hierarchy and caches</h1>
+    <p class="lede">Stage 1 mentioned that main memory takes hundreds of clock ticks to answer. CPUs hide that with caches, and whether your code works with them or against them can change its speed by ten times or more, with the same Big-O and the same answer. This lesson shows how.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="cs-title">
+    <h2 id="cs-title" style="margin-top:0;font-size:1.25rem">Sum a matrix two ways</h2>
+    <div class="try">An 8×8 matrix of ints, stored row by row. The cache holds 4 lines of 4 ints each. Run both loop orders and compare the hit rates.</div>
+    <div class="seg" id="cs-order" role="group" aria-label="Loop order"></div>
+    <div class="cs-grid">
+      <div class="mat" id="cs-mat" aria-label="Matrix"></div>
+      <div class="cache-box"><h4>Cache (4 lines, least recently used is replaced)</h4><div id="cs-cache"></div></div>
+    </div>
+    <div class="cs-stats" id="cs-stats"></div>
+    <p class="cs-msg" id="cs-msg" aria-live="polite"></p>
+    <div class="tr-controls">
+      <button class="btn" type="button" id="cs-play">Play</button>
+      <button class="btn quiet" type="button" id="cs-step">Step</button>
+      <button class="btn quiet" type="button" id="cs-end">Finish</button>
+    </div>
+  </section>
+  <p>Row by row, each miss brings in a line of 4 ints, and the next 3 reads are free: 75% hits. Column by column, every read lands on a different line, and with only 4 lines in the cache, each one is thrown out before it's needed again: 0% hits. Real caches are much bigger, but real matrices are bigger still. Summing a 4096×4096 matrix in C, the column-order loop ran about 10 times slower than the row-order loop in a test for this lesson.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Describe the memory hierarchy, and roughly how slow each level is.</li>
+      <li>Explain cache lines, hits, and misses.</li>
+      <li>Explain temporal and spatial locality, and spot them in code.</li>
+      <li>Choose loop orders and data layouts that work with the cache.</li>
+      <li>Recognize the same caching idea in browsers, databases, and the web.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#hierarchy">The memory hierarchy</a></li>
+      <li><a href="#caches">How a cache works</a></li>
+      <li><a href="#locality">Locality</a></li>
+      <li><a href="#friendly">Writing cache-friendly code</a></li>
+      <li><a href="#everywhere">Caches everywhere</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="hierarchy">The memory hierarchy</h2>
+  <p>Fast memory is expensive and has to sit close to the CPU, so there's only a little of it. Cheap memory is slow and far away. So computers use a <span class="hl">hierarchy</span>: a small, fast level in front of a bigger, slower one, several times over. These figures come from Peter Norvig's widely shared table of approximate timings:</p>
+  <div class="table-scroll">
+  <table class="scale">
+    <thead><tr><th>Operation</th><th>Time</th><th>If an L1 read took 1 second</th></tr></thead>
+    <tbody>
+      <tr><td>Read from L1 cache</td><td>0.5 ns</td><td>1 second</td></tr>
+      <tr><td>Read from L2 cache</td><td>7 ns</td><td>14 seconds</td></tr>
+      <tr><td>Read from main memory (RAM)</td><td>100 ns</td><td>3.3 minutes</td></tr>
+      <tr><td>Seek to a new spot on a spinning disk</td><td>8 ms</td><td>6 months</td></tr>
+      <tr><td>Send a packet from the U.S. to Europe and back</td><td>150 ms</td><td>9.5 years</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Exact numbers vary by machine and have improved for some levels (SSDs answer in tens of microseconds, not milliseconds), but the shape of the table hasn't changed: every step down the hierarchy is roughly ten to a thousand times slower than the one above.</p>
+
+  <div class="problem" data-id="cache-p1" data-answer="200|200s|200seconds">
+    <span class="qtag">Practice 1</span>
+    <p class="q">Using the table, how many times slower is a read from main memory than a read from L1?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>100 ns divided by 0.5 ns.</details>
+    <div class="solution" hidden><p><strong>200</strong> times. A CPU that has to wait for RAM on every read spends almost all its time waiting, which is why the cache's hit rate matters so much.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="caches">How a cache works</h2>
+  <p>A <span class="hl">cache</span> keeps copies of recently used memory. When the CPU reads an address, the cache checks whether it has a copy: a <em>hit</em> answers in a nanosecond or so; a <em>miss</em> fetches from the next level down and keeps a copy for next time. When the cache is full, it evicts something, usually the line used least recently.</p>
+  <p>Caches never fetch a single byte. They move memory in fixed-size blocks called <span class="hl">cache lines</span>, 64 bytes on nearly every modern CPU. Reading one int brings in the 15 ints around it, on the bet that you'll want them soon. Modern CPUs have two or three levels: a small L1 (tens of KB) per core, a bigger L2, and an L3 of several MB shared by all the cores.</p>
+
+  <div class="problem" data-id="cache-p2" data-answer="16|sixteen">
+    <span class="qtag">Practice 2</span>
+    <p class="q">How many 4-byte ints fit in one 64-byte cache line?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Divide.</details>
+    <div class="solution" hidden><p>64 ÷ 4 = <strong>16</strong>. The panel uses 4 ints per line to keep the picture small; real lines hold 16.</p></div>
+  </div>
+
+  <div class="problem" data-id="cache-p3" data-answer="93.75|93.75%|15/16|0.9375">
+    <span class="qtag">Practice 3</span>
+    <p class="q">Reading a big int array from start to end with 64-byte lines, what percentage of reads are cache hits? (Assume one miss per line.)</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="decimal" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>One miss brings in 16 ints. How many of those 16 reads hit?</details>
+    <div class="solution" hidden><p>15 of every 16: <strong>93.75%</strong>. In practice it's even better, because CPUs notice the pattern and <em>prefetch</em> the next lines before you ask.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="locality">Locality</h2>
+  <p>Caches work because real programs have <span class="hl">locality</span>:</p>
+  <ul>
+    <li><strong>Temporal locality:</strong> if you used something recently, you'll probably use it again soon. A loop counter, a running total, a function called in a loop.</li>
+    <li><strong>Spatial locality:</strong> if you used something, you'll probably use what's next to it soon. Walking through an array, reading the fields of one struct.</li>
+  </ul>
+  <p>Code with good locality runs at cache speed. Code without it runs at memory speed. That's the difference the panel shows, and the reason behind the linked list vs. array result from stage 3: following <code>next</code> pointers jumps around memory, so each node can be a fresh miss.</p>
+
+  <div class="mcq" data-id="cache-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">In <code>for (i = 0; i &lt; n; i++) total += a[i];</code>, which kind of locality does reading <code>a[i]</code> show?</p>
+    <div class="choices">
+      <button type="button" data-why="Each a[i] is read only once, so it's not reused. total is the variable with temporal locality.">Temporal: the same element is reused</button>
+      <button type="button">Spatial: each read is right next to the previous one</button>
+      <button type="button" data-why="It reads consecutive addresses, which is excellent locality.">None: every read is a different element</button>
+      <button type="button" data-why="Reading a[i] doesn't depend on network or disk.">Network locality</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Spatial.</strong> Consecutive elements share cache lines. The variable <code>total</code>, used every iteration, shows temporal locality.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="friendly">Writing cache-friendly code</h2>
+  <p>C stores a 2D array <em>row by row</em> (row-major order), so <code>m[i][j]</code> and <code>m[i][j+1]</code> are neighbors, while <code>m[i][j]</code> and <code>m[i+1][j]</code> are a whole row apart. That's why loop order matters:</p>
+  <div class="side">
+<pre><code>// fast: inner loop walks along a row
+for (int i = 0; i &lt; N; i++)
+    for (int j = 0; j &lt; N; j++)
+        sum += m[i][j];</code></pre>
+<pre><code>// slow: inner loop jumps between rows
+for (int j = 0; j &lt; N; j++)
+    for (int i = 0; i &lt; N; i++)
+        sum += m[i][j];</code></pre>
+  </div>
+  <p>Other habits follow from the same idea: prefer arrays to linked structures in hot loops; keep data that's used together, stored together; and for big matrix work, process the data in small <em>tiles</em> that fit in the cache. Python's NumPy library stores arrays row-major too, and its fast operations are fast largely because they walk memory in order inside compiled code.</p>
+
+  <div class="mcq" data-id="cache-q2" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">A C program processes a large <code>image[height][width]</code> array. Which loop nesting is faster?</p>
+    <div class="choices">
+      <button type="button">Outer loop over rows (y), inner loop over columns (x)</button>
+      <button type="button" data-why="The inner loop would then jump a whole row each time, missing the cache.">Outer loop over columns (x), inner loop over rows (y)</button>
+      <button type="button" data-why="Same work, very different memory pattern.">They're the same speed</button>
+      <button type="button" data-why="One loop or two, it's the access order that matters.">Neither; it depends only on the compiler</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Rows outside, columns inside</strong>, so the inner loop walks consecutive addresses in each row. Compilers sometimes swap loops for you, but not reliably, so write it the right way.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="everywhere">Caches everywhere</h2>
+  <p>The same trick, keeping a small fast copy in front of something big and slow, appears at every level of computing: the operating system keeps recently read disk blocks in RAM; your browser keeps images and scripts it already downloaded; content delivery networks keep copies of websites in data centers near you; and applications put Redis or Memcached in front of their databases. Stage 2's <code>@cache</code> was one too.</p>
+  <p>Every cache has the same hard problem: the copy can go stale when the original changes. Deciding when to throw a copy away is called <em>cache invalidation</em>, and it's hard enough to have inspired the programming joke, attributed to Phil Karlton: "There are only two hard things in computer science: cache invalidation and naming things."</p>
+
+  <div class="mcq" data-id="cache-q3" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">A website caches product prices for 10 minutes to take load off its database. What's the risk?</p>
+    <div class="choices">
+      <button type="button" data-why="Caching reduces database load; that's the point.">The database gets more traffic</button>
+      <button type="button" data-why="Cached reads are faster, not slower.">Pages load more slowly</button>
+      <button type="button">A customer can see an old price for up to 10 minutes after it changes</button>
+      <button type="button" data-why="The cache holds copies; the originals are untouched.">Prices get deleted from the database</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Stale data.</strong> Every cache trades freshness for speed. Real systems shorten the time limit for data that changes often, or actively remove (invalidate) the cached copy whenever the original changes.</p></div>
+  </div>
+
+  <h2>Where this idea comes from</h2>
+  <div class="story">
+    <h3>Numbers every programmer should know</h3>
+    <p>The table at the top of this lesson comes from Peter Norvig's essay "Teach Yourself Programming in Ten Years", and Google's Jeff Dean spread a version of it through talks to engineers, where it became known as "latency numbers every programmer should know". Its point isn't the exact values, which change with every hardware generation. It's that the gaps are enormous and stable: registers and caches are a thousand times faster than a trip to RAM, which is a thousand times faster than a disk seek, which is many times faster than a trip across an ocean. Designs that respect those gaps, by keeping hot data close and doing expensive trips rarely and in bulk, beat cleverer designs that don't.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Memory is a hierarchy: registers, L1, L2, L3, RAM, disk, network, each much bigger and much slower than the last.</li>
+    <li>Caches move 64-byte lines. Hits cost about a nanosecond; misses cost up to a hundred.</li>
+    <li>Temporal locality reuses data; spatial locality uses neighbors. Both make caches work.</li>
+    <li>In C and NumPy, arrays are row-major: loop over rows outside and columns inside.</li>
+    <li>Caching is everywhere, and every cache must decide when its copy is stale.</li>
+  </ul>
+
+  <h3>Try it yourself</h3>
+  <p>Compile with <code>gcc -O2 cache.c -o cache</code> and run it to see the gap on your machine:</p>
+<pre><code>#include &lt;stdio.h&gt;
+#include &lt;time.h&gt;
+#define N 4096
+static int m[N][N];
+
+int main(void) {
+    for (int i = 0; i &lt; N; i++)          // fill it first: untouched memory can
+        for (int j = 0; j &lt; N; j++)      // all map to one shared zero page
+            m[i][j] = i ^ j;
+    long long s = 0;
+    clock_t t = clock();
+    for (int i = 0; i &lt; N; i++) for (int j = 0; j &lt; N; j++) s += m[i][j];
+    double rows = (double)(clock() - t) / CLOCKS_PER_SEC;
+    t = clock();
+    for (int j = 0; j &lt; N; j++) for (int i = 0; i &lt; N; i++) s += m[i][j];
+    double cols = (double)(clock() - t) / CLOCKS_PER_SEC;
+    printf("rows: %.3fs  columns: %.3fs  (%lld)\n", rows, cols, s);
+}</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 3</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="caches">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Reading assembly</strong>: what your C turns into, instruction by instruction.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.cs.cmu.edu/~213/" target="_blank" rel="noopener">CMU 15-213: Introduction to Computer Systems</a><span>The memory hierarchy and cache memories lectures, and the cache lab.</span></li>
+      <li><a href="https://cs61c.org/" target="_blank" rel="noopener">Berkeley CS61C</a><span>Caches in depth: mapping, associativity, and writing cache-aware code.</span></li>
+      <li><a href="https://norvig.com/21-days.html" target="_blank" rel="noopener">Peter Norvig: Teach Yourself Programming in Ten Years</a><span>The essay with the original timing table near the end.</span></li>
+      <li><a href="https://colin-scott.github.io/personal_website/research/interactive_latency.html" target="_blank" rel="noopener">Latency numbers every programmer should know (interactive)</a><span>The same table with a slider showing how each number has changed by year.</span></li>
+      <li><a href="https://people.freebsd.org/~lstewart/articles/cpumemory.pdf" target="_blank" rel="noopener">Ulrich Drepper: What every programmer should know about memory</a><span>A long, deep paper on caches, RAM, and how to program for them. Read sections 1 to 3 first.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/CPU_cache" target="_blank" rel="noopener">CPU cache (Wikipedia)</a><span>Cache levels, lines, associativity, and replacement policies.</span></li>
+      <li><a href="https://martinfowler.com/bliki/TwoHardThings.html" target="_blank" rel="noopener">Martin Fowler: Two hard things</a><span>On the cache invalidation quote and its many variations.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Cache simulator: 8x8 row-major int matrix, 4 ints per line, 4-line fully associative LRU cache.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const N = 8, PER = 4, LINES = 4;
+    let order = 'Row by row', frames = [], k = 0, timer = null;
+
+    function record() {
+      const cache = [], out = [];   // cache: line ids, most recently used last
+      let hits = 0, misses = 0;
+      for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) {
+        const [i, j] = order === 'Row by row' ? [a, b] : [b, a];
+        const idx = i * N + j, line = Math.floor(idx / PER), at = cache.indexOf(line);
+        let hit = at >= 0, evicted = null;
+        if (hit) { cache.splice(at, 1); hits++; } else { misses++; if (cache.length === LINES) evicted = cache.shift(); }
+        cache.push(line);
+        out.push({ idx, i, j, hit, line, evicted, cache: cache.slice(), hits, misses });
+      }
+      return out;
+    }
+    const cells = [];
+    for (let i = 0; i < N * N; i++) { const c = document.createElement('div'); c.className = 'mc'; c.textContent = `${Math.floor(i / N)},${i % N}`; $('cs-mat').append(c); cells.push(c); }
+
+    function render() {
+      const f = frames[k - 1], inCache = new Set(f ? f.cache : []);
+      const done = new Set(frames.slice(0, k).map(x => x.idx));
+      cells.forEach((c, i) => {
+        const line = Math.floor(i / PER);
+        c.className = 'mc' + (i % PER === 0 ? ' lineA' : '') + (f && i === f.idx ? (f.hit ? ' hit' : ' miss') : inCache.has(line) ? ' cached' : '') + (done.has(i) ? ' done' : '');
+      });
+      const lines = f ? f.cache.slice().reverse() : [];
+      $('cs-cache').innerHTML = Array.from({ length: LINES }, (_, s) => {
+        const l = lines[s];
+        if (l === undefined) return '<div class="cline empty">empty</div>';
+        const r = Math.floor((l * PER) / N), c0 = (l * PER) % N;
+        return `<div class="cline${f && l === f.line ? (f.hit ? ' used' : ' new') : ''}">m[${r}][${c0}..${c0 + PER - 1}]</div>`;
+      }).join('');
+      const h = f ? f.hits : 0, m = f ? f.misses : 0;
+      $('cs-stats').innerHTML = `<span>Reads: <b>${k}</b> of 64</span><span>Hits: <b>${h}</b></span><span>Misses: <b>${m}</b></span><span>Hit rate: <b>${k ? Math.round((h / k) * 100) : 0}%</b></span>`;
+      $('cs-msg').textContent = !f ? 'Press Play or Step. The left edge of each group of 4 cells marks where a cache line starts.'
+        : f.hit ? `Read m[${f.i}][${f.j}]: hit. Its line is already in the cache.`
+        : `Read m[${f.i}][${f.j}]: miss. Fetch its whole line from memory${f.evicted !== null ? ', evicting the least recently used line' : ''}.`;
+      $('cs-step').disabled = $('cs-end').disabled = k === frames.length;
+    }
+    function stop() { clearInterval(timer); timer = null; $('cs-play').textContent = 'Play'; }
+    function reset() { stop(); frames = record(); k = 0; render(); }
+    ['Row by row', 'Column by column'].forEach(o => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = o; b.setAttribute('aria-pressed', o === order);
+      b.onclick = () => { order = o; [...$('cs-order').children].forEach(c => c.setAttribute('aria-pressed', c === b)); reset(); };
+      $('cs-order').append(b);
+    });
+    $('cs-play').onclick = () => {
+      if (timer) return stop();
+      if (k === frames.length) k = 0;
+      $('cs-play').textContent = 'Pause';
+      timer = setInterval(() => { k++; if (k >= frames.length) { k = frames.length; stop(); } render(); }, 160);
+    };
+    $('cs-step').onclick = () => { stop(); k = Math.min(frames.length, k + 1); render(); };
+    $('cs-end').onclick = () => { stop(); k = frames.length; render(); };
+    reset();
+  })();
+</script>
+</body>
+</html>

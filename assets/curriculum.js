@@ -48,7 +48,7 @@ window.CURRICULUM = [
     lessons: [
       { id: 'c-pointers', title: 'C and pointers', href: 'lessons/19-c-and-pointers.html', minutes: 45 },
       { id: 'memory', title: 'The stack and the heap', href: 'lessons/20-stack-and-heap.html', minutes: 40 },
-      { id: 'caches', title: 'The memory hierarchy and caches' },
+      { id: 'caches', title: 'The memory hierarchy and caches', href: 'lessons/21-caches.html', minutes: 40 },
       { id: 'assembly', title: 'Reading assembly' },
       { id: 'linking', title: 'From source code to running program' },
       { id: 'performance', title: 'Measuring and improving performance' },
