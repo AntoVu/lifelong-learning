@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reading assembly | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .ax-top { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; margin-bottom: .7rem; }
+  .ax-grid { display: grid; grid-template-columns: minmax(0, .65fr) minmax(0, 1.35fr); gap: 1rem; }
+  @media (max-width: 700px) { .ax-grid { grid-template-columns: 1fr; } }
+  .ax-grid h4 { font: 600 .8rem var(--sans); color: var(--ink-2); margin: 0 0 .3rem; }
+  .ax-grid pre { margin: 0; font-size: .82rem; }
+  .asm-line { display: block; }
+  .asm-line .c { color: var(--ink-2); }
+  .asm-line.now { background: var(--hl); color: var(--hl-ink); }
+  .asm-line.now .c { color: var(--hl-ink); }
+  .regs { display: flex; flex-wrap: wrap; gap: .4rem .9rem; font: .85rem var(--mono); margin: .8rem 0 .3rem; }
+  .regs span { padding: .1rem .4rem; border: 1px solid var(--rule); border-radius: 4px; }
+  .regs span.chg { background: var(--hl); color: var(--hl-ink); border-color: var(--ink); }
+  .ax-msg { font: .95rem var(--sans); margin: .3rem 0 .6rem; min-height: 1.4em; }
+  .ax-note { font: .9rem var(--sans); color: var(--ink-2); margin: .7rem 0 0; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 4: Computer systems, lesson 4 of 6</div>
+    <h1>Reading assembly</h1>
+    <p class="lede">Stage 1 built a toy computer with nine instructions. A real x86-64 processor has over a thousand, but the code compilers actually produce uses a few dozen, and they work just like the toy ones. This lesson teaches you to read them, which is how you debug crashes, understand performance, and see what your compiler did with your code.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="ax-title">
+    <h2 id="ax-title" style="margin-top:0;font-size:1.25rem">C next to its assembly</h2>
+    <div class="try">Pick a function and an optimization level. This is real GCC output for x86-64 Linux, lightly tidied. For <code>sum</code> at -O1, step through a run on the array [3, 1, 4].</div>
+    <div class="ax-top">
+      <div class="seg" id="ax-fn" role="group" aria-label="Function"></div>
+      <div class="seg" id="ax-opt" role="group" aria-label="Optimization level"></div>
+    </div>
+    <div class="ax-grid">
+      <div><h4>C</h4><pre><code id="ax-c"></code></pre></div>
+      <div><h4 id="ax-asm-h">Assembly</h4><pre><code id="ax-asm"></code></pre></div>
+    </div>
+    <div id="ax-run">
+      <div class="regs" id="ax-regs"></div>
+      <p class="ax-msg" id="ax-msg" aria-live="polite"></p>
+      <div class="tr-controls">
+        <button class="btn" type="button" id="ax-step">Step</button>
+        <button class="btn quiet" type="button" id="ax-reset">Reset</button>
+      </div>
+    </div>
+    <p class="ax-note" id="ax-note"></p>
+  </section>
+  <p>Switch between -O0 and -O1 for the same function. Without optimization, GCC keeps every variable in memory and reloads it constantly, which makes debugging easy. With it, everything lives in registers, and <code>sum</code>'s loop shrinks to four instructions per item.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Name the main x86-64 registers and what they're used for.</li>
+      <li>Read <code>mov</code>, <code>add</code>, <code>lea</code>, <code>cmp</code>, jumps, <code>call</code>, and <code>ret</code>.</li>
+      <li>Use the calling convention to find a function's arguments and return value.</li>
+      <li>Recognize <code>if</code> statements and loops in assembly.</li>
+      <li>Explain what an optimizing compiler changes, and why it's allowed to.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#why">Why read assembly</a></li>
+      <li><a href="#registers">Registers</a></li>
+      <li><a href="#instructions">The instructions you'll see</a></li>
+      <li><a href="#calls">Calling conventions</a></li>
+      <li><a href="#flow">Branches and loops</a></li>
+      <li><a href="#opt">What the optimizer does</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="why">Why read assembly</h2>
+  <p>You'll rarely write assembly. But you'll read it when a program crashes without source code (a debugger shows you the instruction that faulted), when you need to know why a loop is slow, when you're checking whether the compiler vectorized something, and in security work, where malware and exploits only exist as machine code. Compiler Explorer (godbolt.org) shows the assembly for any snippet in any major compiled language, and it's the easiest way to keep practicing.</p>
+
+  <!-- 2 -->
+  <h2 id="registers">Registers</h2>
+  <p>x86-64 has 16 general-purpose 64-bit registers. Their names are historical: <code>rax</code>, <code>rbx</code>, <code>rcx</code>, <code>rdx</code>, <code>rsi</code>, <code>rdi</code>, <code>rbp</code>, <code>rsp</code>, and <code>r8</code> through <code>r15</code>. Each also has smaller views: <code>eax</code> is the low 32 bits of <code>rax</code>, which is why 32-bit <code>int</code> code uses the <code>e</code> names. Two registers have fixed jobs: <code>rsp</code> is the stack pointer from the last lesson, and <code>rip</code> is the program counter from stage 1. The ALU flags from stage 1 (zero, sign, carry, overflow) live in a flags register that comparisons set and conditional jumps read.</p>
+
+  <div class="mcq" data-id="asm-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">What is <code>eax</code>?</p>
+    <div class="choices">
+      <button type="button" data-why="It's part of rax, not separate: writing eax changes rax.">A separate 32-bit register next to rax</button>
+      <button type="button" data-why="That's ax (16 bits). eax is 32.">The low 16 bits of rax</button>
+      <button type="button">The low 32 bits of rax</button>
+      <button type="button" data-why="The program counter is rip.">The program counter</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>The low 32 bits of rax.</strong> (A quirk: writing to <code>eax</code> also clears the top 32 bits of <code>rax</code>.) Functions returning an <code>int</code> leave it in <code>eax</code>.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="instructions">The instructions you'll see</h2>
+  <p>This lesson uses Intel syntax, where the destination comes first: <code>add eax, edx</code> means eax = eax + edx. (Linux tools often default to AT&amp;T syntax, which reverses the order and adds <code>%</code> signs; Compiler Explorer lets you pick.)</p>
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th>Instruction</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>mov a, b</code></td><td>a = b. Square brackets mean memory: <code>mov eax, [rdi]</code> loads the int at the address in rdi (that's <code>*p</code>).</td></tr>
+      <tr><td><code>add a, b</code> / <code>sub a, b</code></td><td>a = a + b / a = a − b, setting the flags</td></tr>
+      <tr><td><code>lea a, [x + y*4]</code></td><td>"Load effective address": computes the address expression without touching memory. Compilers use it as a quick calculator.</td></tr>
+      <tr><td><code>cmp a, b</code> / <code>test a, b</code></td><td>Compute a − b (or a AND b), keep only the flags</td></tr>
+      <tr><td><code>jmp L</code>, <code>je</code>, <code>jne</code>, <code>jl</code>, <code>jle</code>, ...</td><td>Jump, always or only if the flags say equal, not equal, less, ... (stage 1's JMP and JZ)</td></tr>
+      <tr><td><code>call f</code> / <code>ret</code></td><td>Push the return address and jump to f / pop it and jump back</td></tr>
+      <tr><td><code>push x</code> / <code>pop x</code></td><td>Put x on the stack / take it off</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="problem" data-id="asm-p1" data-answer="12|twelve">
+    <span class="qtag">Practice 1</span>
+    <p class="q">With edi = 5 and esi = 7, what is in eax after <code>lea eax, [rdi+rsi]</code>?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>lea computes the expression in the brackets and stores it, without reading memory.</details>
+    <div class="solution" hidden><p>5 + 7 = <strong>12</strong>. That one instruction is the whole <code>add</code> function at -O1. It adds two registers into a third, which plain <code>add</code> can't do.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="calls">Calling conventions</h2>
+  <p>How does a function know where its arguments are? A <span class="hl">calling convention</span>, an agreement every compiler on the platform follows. On Linux and macOS (the System V convention), the first six integer or pointer arguments go in <code>rdi</code>, <code>rsi</code>, <code>rdx</code>, <code>rcx</code>, <code>r8</code>, and <code>r9</code>, and the return value comes back in <code>rax</code>. Windows uses a different list (<code>rcx</code>, <code>rdx</code>, <code>r8</code>, <code>r9</code>), which is one reason compiled programs aren't portable between the two.</p>
+  <p>The convention also says the stack pointer must be a multiple of 16 when a <code>call</code> happens. A <code>call</code> pushes an 8-byte return address, so on entry to <code>g</code> the stack is 8 bytes off. That's why <code>g</code> at -O1 subtracts 8 from <code>rsp</code> before calling <code>f</code>, and adds it back afterward.</p>
+
+  <div class="problem" data-id="asm-p2" data-answer="rsi|esi">
+    <span class="qtag">Practice 2</span>
+    <p class="q">On Linux, which register holds the second integer argument of a function? (Give the 64-bit or 32-bit name.)</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The order is rdi, rsi, rdx, rcx, r8, r9.</details>
+    <div class="solution" hidden><p><strong>rsi</strong> (or <code>esi</code> for a 32-bit int). In <code>max</code>, <code>a</code> arrives in edi and <code>b</code> in esi.</p></div>
+  </div>
+
+  <div class="mcq" data-id="asm-q2" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">Why does <code>g</code> start with <code>sub rsp, 8</code> even though it has no local variables?</p>
+    <div class="choices">
+      <button type="button" data-why="g stores nothing there; the space is padding.">To make room for x</button>
+      <button type="button">To keep the stack 16-byte aligned for the call to f</button>
+      <button type="button" data-why="The return address is pushed by call itself, not by sub.">To push the return address</button>
+      <button type="button" data-why="Arguments go in registers here, not on the stack.">To pass x to f on the stack</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Alignment.</strong> The incoming return address left the stack 8 bytes off a multiple of 16; subtracting 8 fixes it. Some instructions (used in <code>f</code> or library code) crash on misaligned data, so the convention guarantees it at every call.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="flow">Branches and loops</h2>
+  <p>Assembly has no <code>if</code> or <code>for</code>, only compare and jump, exactly like the toy computer. An <code>if</code> becomes <code>cmp</code> followed by a conditional jump around the code that shouldn't run. A loop becomes a block of code ending in a conditional jump back to its start. Look at <code>sum</code> at -O1: the four lines from <code>.L5</code> to <code>jne .L5</code> are the entire loop.</p>
+  <p>Sometimes the compiler avoids jumping altogether. <code>max</code> uses <code>cmovge</code>, "conditional move if greater or equal", which picks one value or the other without a branch. That sidesteps the branch-prediction penalty from stage 1 when the outcome is unpredictable.</p>
+
+  <div class="problem" data-id="asm-p3" data-answer="4|four">
+    <span class="qtag">Practice 3</span>
+    <p class="q">At -O1, how many instructions does <code>sum</code>'s loop run per array element?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Count from the line after <code>.L5:</code> through <code>jne .L5</code>.</details>
+    <div class="solution" hidden><p><strong>4</strong>: add the item, move the pointer 4 bytes, compare with the end, jump back. Notice there's no <code>i</code> at all. The compiler turned <code>a[i]</code> into a pointer that walks the array, the pointer arithmetic from lesson 1.</p></div>
+  </div>
+
+  <!-- 6 -->
+  <h2 id="opt">What the optimizer does</h2>
+  <p>At -O0, GCC translates each line separately and keeps every variable in its stack slot, so a debugger can show and change any variable at any line. At -O1 and above, it keeps values in registers, deletes work whose result is never used, replaces index loops with pointer walks, inlines small functions, and at -O2 and -O3 may process several array items per instruction (vectorization). The rule it follows is the "as-if" rule: the optimized program must behave as if it ran your code as written, for every program that follows the language's rules.</p>
+  <p>That last part matters. If your code has undefined behavior, like reading past an array or overflowing a signed int, the compiler is allowed to assume it never happens. Optimized builds can then do things that look impossible from the source, such as deleting a safety check. That's why the same buggy program can work at -O0 and fail at -O2.</p>
+
+  <div class="mcq" data-id="asm-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">Why is -O0 code full of loads and stores to addresses like <code>[rbp-4]</code>?</p>
+    <div class="choices">
+      <button type="button" data-why="The hardware has plenty of registers for these tiny functions.">x86-64 has too few registers</button>
+      <button type="button" data-why="Memory is far slower than registers; it's not done for speed.">Memory is faster than registers</button>
+      <button type="button" data-why="The C standard doesn't require variables to be in memory.">The C standard requires every variable to live in memory</button>
+      <button type="button">Unoptimized code keeps each variable in its own stack slot so debuggers can find and change it at any line</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Debuggability.</strong> It's slow but predictable. Release builds use -O2 and ship separate debug information to map instructions back to source lines.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>Reflections on Trusting Trust, 1984</h3>
+    <p>Accepting the Turing Award, Ken Thompson, co-creator of Unix, described an attack that can only be seen in machine code. Modify a C compiler so that when it compiles the Unix <code>login</code> program, it inserts a secret password that always works. Then modify it so that when it compiles a <em>compiler</em>, it inserts both tricks into the new compiler. Compile it once, and remove the changes from the source code. Every future compiler built from the clean source will still carry the backdoor, and so will every <code>login</code> it builds, with nothing visible in any source file. His conclusion: "You can't trust code that you did not totally create yourself." Modern defenses include reproducible builds, where independent parties rebuild the same source and check that the machine code matches bit for bit.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>x86-64 has 16 general registers; <code>eax</code> is the low half of <code>rax</code>; <code>rsp</code> is the stack pointer, <code>rip</code> the program counter.</li>
+    <li>Intel syntax puts the destination first. Brackets mean memory. <code>lea</code> computes addresses (and quick math).</li>
+    <li>On Linux, arguments arrive in rdi, rsi, rdx, rcx, r8, r9; results return in rax.</li>
+    <li>Branches are <code>cmp</code> plus a conditional jump; loops jump backward; <code>cmov</code> avoids a branch.</li>
+    <li>Optimizers keep values in registers and restructure loops, under the as-if rule. Undefined behavior voids the deal.</li>
+  </ul>
+
+  <h3>Try it yourself</h3>
+  <p>Paste any function into <a href="https://godbolt.org/" target="_blank" rel="noopener">Compiler Explorer</a> and compare <code>-O0</code> with <code>-O2</code>. Or, with GCC installed:</p>
+<pre><code>gcc -O1 -S -masm=intel sum.c -o sum.s    # writes the assembly to sum.s
+objdump -d -M intel ./program             # disassembles a compiled program (Linux)</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 4</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="assembly">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>From source code to running program</strong>: the compiler, assembler, linker, and loader.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.cs.cmu.edu/~213/" target="_blank" rel="noopener">CMU 15-213: Introduction to Computer Systems</a><span>The machine-level programming lectures (basics, control, procedures, data) and the famous bomb lab, where you defuse a program by reading its assembly.</span></li>
+      <li><a href="https://godbolt.org/" target="_blank" rel="noopener">Compiler Explorer</a><span>Live assembly for C, C++, Rust, Go, and more, with color-coded links between source lines and instructions.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/X86_calling_conventions" target="_blank" rel="noopener">x86 calling conventions (Wikipedia)</a><span>System V, Microsoft x64, and the older 32-bit conventions side by side.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/X86-64" target="_blank" rel="noopener">x86-64 (Wikipedia)</a><span>How AMD extended the 32-bit x86 to 64 bits in 2003, and what changed.</span></li>
+      <li><a href="https://sourceware.org/gdb/current/onlinedocs/gdb.html/Machine-Code.html" target="_blank" rel="noopener">GDB manual: Source and machine code</a><span>Using <code>disassemble</code> in a debugger to see the instructions behind each line.</span></li>
+      <li><a href="https://www.cs.cmu.edu/~rdriley/487/papers/Thompson_1984_ReflectionsonTrustingTrust.pdf" target="_blank" rel="noopener">Ken Thompson: Reflections on Trusting Trust (PDF)</a><span>The three-page Turing Award lecture. Very readable.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // C/assembly explorer. Assembly is GCC 15 output (-masm=intel -mabi=sysv), with directives removed and
+  // GAS's "-4[rbp]" written as the more common "[rbp-4]". Comments are ours.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const FNS = {
+      add: {
+        c: 'int add(int a, int b) {\n    return a + b;\n}',
+        O0: [['add:', ''], ['push rbp', 'save the caller\'s frame pointer'], ['mov rbp, rsp', 'start this function\'s frame'], ['mov DWORD PTR [rbp-4], edi', 'store a in the frame'], ['mov DWORD PTR [rbp-8], esi', 'store b in the frame'], ['mov edx, DWORD PTR [rbp-4]', 'load a back'], ['mov eax, DWORD PTR [rbp-8]', 'load b back'], ['add eax, edx', 'eax = b + a'], ['pop rbp', 'restore the caller\'s frame pointer'], ['ret', 'return; the result is in eax']],
+        O1: [['add:', ''], ['lea eax, [rdi+rsi]', 'eax = a + b, in one instruction'], ['ret', 'return eax']],
+      },
+      max: {
+        c: 'int max(int a, int b) {\n    return a > b ? a : b;\n}',
+        O0: [['max:', ''], ['push rbp', ''], ['mov rbp, rsp', ''], ['mov DWORD PTR [rbp-4], edi', 'store a'], ['mov DWORD PTR [rbp-8], esi', 'store b'], ['mov edx, DWORD PTR [rbp-8]', 'edx = b'], ['mov eax, DWORD PTR [rbp-4]', 'eax = a'], ['cmp edx, eax', 'compare b with a (sets flags)'], ['cmovge eax, edx', 'if b >= a, eax = b'], ['pop rbp', ''], ['ret', 'return eax']],
+        O1: [['max:', ''], ['cmp esi, edi', 'compare b with a'], ['mov eax, edi', 'guess the answer is a'], ['cmovge eax, esi', 'if b >= a, take b instead (no jump)'], ['ret', 'return eax']],
+      },
+      sum: {
+        c: 'int sum(int *a, int n) {\n    int s = 0;\n    for (int i = 0; i < n; i++)\n        s += a[i];\n    return s;\n}',
+        O0: [['sum:', ''], ['push rbp', ''], ['mov rbp, rsp', ''], ['mov QWORD PTR [rbp-24], rdi', 'store a (8-byte pointer)'], ['mov DWORD PTR [rbp-28], esi', 'store n'], ['mov DWORD PTR [rbp-4], 0', 's = 0'], ['mov DWORD PTR [rbp-8], 0', 'i = 0'], ['jmp .L6', 'go test the loop condition first'], ['.L7:', 'loop body'], ['mov eax, DWORD PTR [rbp-8]', 'eax = i'], ['cdqe', 'widen i to 64 bits'], ['lea rdx, [rax*4]', 'rdx = i * 4 (bytes)'], ['mov rax, QWORD PTR [rbp-24]', 'rax = a'], ['add rax, rdx', 'rax = &a[i]'], ['mov eax, DWORD PTR [rax]', 'eax = a[i]'], ['add DWORD PTR [rbp-4], eax', 's += a[i]'], ['add DWORD PTR [rbp-8], 1', 'i++'], ['.L6:', 'loop test'], ['mov eax, DWORD PTR [rbp-8]', 'eax = i'], ['cmp eax, DWORD PTR [rbp-28]', 'compare i with n'], ['jl .L7', 'if i < n, run the body again'], ['mov eax, DWORD PTR [rbp-4]', 'return s'], ['pop rbp', ''], ['ret', '']],
+        O1: [['sum:', ''], ['test esi, esi', 'is n <= 0?'], ['jle .L6', 'if so, skip the loop'], ['mov rax, rdi', 'rax = pointer to a[0]'], ['movsx rsi, esi', 'widen n to 64 bits'], ['lea rcx, [rdi+rsi*4]', 'rcx = end pointer, &a[n]'], ['mov edx, 0', 's = 0'], ['.L5:', 'the loop: four instructions'], ['add edx, DWORD PTR [rax]', 's += *p'], ['add rax, 4', 'p++ (4 bytes)'], ['cmp rax, rcx', 'reached the end?'], ['jne .L5', 'if not, loop'], ['.L3:', ''], ['mov eax, edx', 'return s'], ['ret', ''], ['.L6:', 'n <= 0 case'], ['mov edx, 0', 's = 0'], ['jmp .L3', '']],
+      },
+      g: {
+        c: 'int f(int x);   // defined elsewhere\n\nint g(int x) {\n    return f(x) + 1;\n}',
+        O0: [['g:', ''], ['push rbp', ''], ['mov rbp, rsp', ''], ['sub rsp, 16', 'make room on the stack'], ['mov DWORD PTR [rbp-4], edi', 'store x'], ['mov eax, DWORD PTR [rbp-4]', 'load x'], ['mov edi, eax', 'first argument for f = x'], ['call f', 'push return address, jump to f'], ['add eax, 1', 'f\'s result + 1'], ['leave', 'undo the frame (mov rsp, rbp; pop rbp)'], ['ret', '']],
+        O1: [['g:', ''], ['sub rsp, 8', 'realign the stack to 16 bytes'], ['call f', 'x is already in edi, so just call'], ['add eax, 1', 'f\'s result + 1'], ['add rsp, 8', 'undo the alignment'], ['ret', '']],
+      },
+    };
+    let fn = 'sum', opt = 'O1', run = null;
+
+    // A tiny simulation of sum at -O1 on a = [3, 1, 4] stored at 0x1000.
+    function simulate() {
+      const mem = { 0x1000: 3, 0x1004: 1, 0x1008: 4 }, L = FNS.sum.O1.map(x => x[0]);
+      const r = { rdi: 0x1000, esi: 3, rax: 0, rcx: 0, edx: 0, eax: 0 };
+      const steps = [{ pc: 0, r: { ...r }, msg: 'sum(a, 3) is called: rdi holds a’s address (0x1000) and esi holds n = 3. Press Step.' }];
+      let pc = 1, zf = false, le = false, guard = 0;
+      const hex = v => '0x' + v.toString(16);
+      while (pc < L.length && guard++ < 60) {
+        const ins = L[pc]; let next = pc + 1, msg = '';
+        if (ins.endsWith(':')) { pc = next; continue; }
+        if (ins === 'test esi, esi') { le = r.esi <= 0; msg = `n = ${r.esi}, which is positive.`; }
+        else if (ins === 'jle .L6') { if (le) next = L.indexOf('.L6:'); msg = le ? 'n <= 0: skip to the end.' : 'Not taken: n > 0, so fall through into the setup.'; }
+        else if (ins === 'mov rax, rdi') { r.rax = r.rdi; msg = `rax = ${hex(r.rax)}, a pointer to a[0].`; }
+        else if (ins === 'movsx rsi, esi') { msg = 'Widen n to 64 bits so it can be used in address math.'; }
+        else if (ins === 'lea rcx, [rdi+rsi*4]') { r.rcx = r.rdi + r.esi * 4; msg = `rcx = 0x1000 + 3 × 4 = ${hex(r.rcx)}, one past the last item.`; }
+        else if (ins === 'mov edx, 0') { r.edx = 0; msg = 's = 0, kept in edx.'; }
+        else if (ins === 'add edx, DWORD PTR [rax]') { const v = mem[r.rax]; r.edx += v; msg = `Read ${v} from ${hex(r.rax)}; s is now ${r.edx}.`; }
+        else if (ins === 'add rax, 4') { r.rax += 4; msg = `Move the pointer 4 bytes: rax = ${hex(r.rax)}.`; }
+        else if (ins === 'cmp rax, rcx') { zf = r.rax === r.rcx; msg = zf ? 'rax equals rcx: we’re past the last item.' : `rax ≠ rcx: more items left.`; }
+        else if (ins === 'jne .L5') { if (!zf) next = L.indexOf('.L5:'); msg = zf ? 'Not taken: the loop is done.' : 'Jump back to the top of the loop.'; }
+        else if (ins === 'mov eax, edx') { r.eax = r.edx; msg = `eax = ${r.eax}, the return value.`; }
+        else if (ins === 'ret') { msg = `Return ${r.eax} to the caller. 3 + 1 + 4 = 8.`; steps.push({ pc, r: { ...r }, msg }); break; }
+        else if (ins === 'jmp .L3') { next = L.indexOf('.L3:'); }
+        steps.push({ pc, r: { ...r }, msg });
+        pc = next;
+      }
+      return steps;
+    }
+
+    function render() {
+      const F = FNS[fn], lines = F[opt];
+      $('ax-c').textContent = F.c;
+      const cur = run ? run.steps[run.k] : null;
+      $('ax-asm').innerHTML = lines.map(([ins, c], i) => `<span class="asm-line${cur && cur.pc === i && i > 0 ? ' now' : ''}">${ins.endsWith(':') ? ins : '    ' + ins.padEnd(24)}${c ? `<span class="c"> ; ${c.replace(/</g, '&lt;')}</span>` : ''}</span>`).join('');
+      $('ax-asm-h').textContent = `Assembly at -${opt}: ${lines.filter(l => !l[0].endsWith(':')).length} instructions`;
+      $('ax-run').hidden = !(fn === 'sum' && opt === 'O1');
+      if (run) {
+        const prev = run.steps[run.k - 1];
+        $('ax-regs').innerHTML = ['rdi', 'esi', 'rax', 'rcx', 'edx', 'eax'].map(n => {
+          const v = cur.r[n], show = n === 'esi' || n === 'edx' || n === 'eax' ? v : '0x' + v.toString(16);
+          return `<span class="${prev && prev.r[n] !== v ? 'chg' : ''}">${n} = ${show}</span>`;
+        }).join('');
+        $('ax-msg').textContent = cur.msg;
+        $('ax-step').disabled = run.k === run.steps.length - 1;
+      }
+      $('ax-note').textContent = {
+        add: 'At -O1, the whole function is one lea and a ret: the same two lines stage 1 showed.',
+        max: 'cmovge picks a value without jumping, so there is no branch to mispredict.',
+        sum: opt === 'O1' ? 'No i anywhere: the loop walks a pointer from a to a + n.' : 'Every use of s, i, a, and n goes through memory. Correct, debuggable, and slow.',
+        g: 'The call convention puts x in edi already, so -O1 passes it straight through to f.',
+      }[fn];
+    }
+    const seg = (host, opts, get, set) => opts.forEach(([v, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = label; b.setAttribute('aria-pressed', v === get());
+      b.onclick = () => { set(v); [...host.children].forEach(c => c.setAttribute('aria-pressed', c === b)); run = { steps: simulate(), k: 0 }; render(); };
+      host.append(b);
+    });
+    seg($('ax-fn'), [['add', 'add'], ['max', 'max'], ['sum', 'sum (a loop)'], ['g', 'g (a call)']], () => fn, v => fn = v);
+    seg($('ax-opt'), [['O0', '-O0'], ['O1', '-O1']], () => opt, v => opt = v);
+    $('ax-step').onclick = () => { run.k = Math.min(run.steps.length - 1, run.k + 1); render(); };
+    $('ax-reset').onclick = () => { run.k = 0; render(); };
+    run = { steps: simulate(), k: 0 };
+    render();
+  })();
+</script>
+</body>
+</html>
