@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From source code to running program | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .pipeline { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin: .4rem 0 1rem; }
+  .pipeline button { font: 600 .88rem var(--sans); padding: .45em .8em; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); cursor: pointer; }
+  .pipeline button[aria-pressed="true"] { background: var(--hl); color: var(--hl-ink); }
+  .pipeline .to { color: var(--ink-2); }
+  .stage-box h4 { font: 600 .95rem var(--sans); margin: 0 0 .3rem; }
+  .stage-box p { font: .95rem var(--sans); margin: 0 0 .6rem; }
+  .stage-box pre { font-size: .82rem; margin: 0 0 .6rem; }
+  .files { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: .6rem; margin-bottom: .6rem; }
+  .files pre { margin: 0; }
+  .files h5 { font: 600 .8rem var(--mono); margin: 0 0 .25rem; color: var(--ink-2); }
+  .link-try { display: flex; flex-wrap: wrap; gap: .4rem; margin: .4rem 0 .5rem; }
+  .err { color: #a33a1f; }
+  @media (prefers-color-scheme: dark) { .err { color: #f2a48e; } }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 4: Computer systems, lesson 5 of 6</div>
+    <h1>From source code to running program</h1>
+    <p class="lede">You type <code>gcc main.c util.c -o app</code> and get a program. Behind that one command are four separate tools and a fifth step when you run it. Knowing them turns baffling errors like "undefined reference" into one-line fixes, and explains how libraries, updates, and some famous attacks work.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="pl-title">
+    <h2 id="pl-title" style="margin-top:0;font-size:1.25rem">One program through the pipeline</h2>
+    <div class="try">Click each stage to see what it produces for this two-file program. Outputs come from GCC and GNU binutils, trimmed and shown as they look on Linux; the Link step is summarized.</div>
+    <div class="files">
+      <div><h5>util.h</h5><pre><code>#define SQUARE_LIMIT 100
+int square(int x);</code></pre></div>
+      <div><h5>util.c</h5><pre><code>#include "util.h"
+
+int calls = 0;
+
+int square(int x) {
+    calls++;
+    return x * x;
+}</code></pre></div>
+      <div><h5>main.c</h5><pre><code>#include &lt;stdio.h&gt;
+#include "util.h"
+
+int main(void) {
+    int y = square(7);
+    if (y &lt; SQUARE_LIMIT)
+        printf("%d\n", y);
+    return 0;
+}</code></pre></div>
+    </div>
+    <div class="pipeline" id="pipeline" role="group" aria-label="Build stage"></div>
+    <div class="stage-box" id="stage" aria-live="polite"></div>
+  </section>
+  <p>Each stage is a separate program that the <code>gcc</code> command runs for you in order. Run <code>gcc -v main.c util.c</code> and you'll see every one of them being called, with all its options.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Name the stages of building a C program and what each produces.</li>
+      <li>Explain what the preprocessor does, and the classic macro trap.</li>
+      <li>Explain declarations, definitions, object files, and symbols.</li>
+      <li>Diagnose "undefined reference" and "multiple definition" linker errors.</li>
+      <li>Compare static and dynamic linking, and describe what the loader does.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#pre">The preprocessor</a></li>
+      <li><a href="#units">Separate compilation</a></li>
+      <li><a href="#linker">The linker</a></li>
+      <li><a href="#libs">Static and dynamic libraries</a></li>
+      <li><a href="#loader">The loader</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="pre">The preprocessor</h2>
+  <p>Before the compiler sees your code, the <span class="hl">preprocessor</span> rewrites it as plain text. <code>#include</code> pastes in the whole contents of another file. <code>#define</code> sets up a text substitution: every <code>SQUARE_LIMIT</code> becomes <code>100</code>. Lines like <code>#ifdef</code> keep or drop code depending on settings, which is how one source file builds for both Windows and Linux.</p>
+  <p>Text substitution knows nothing about C, which leads to a classic trap:</p>
+<pre><code>#define DOUBLE(x) x + x
+
+int n = DOUBLE(3) * 2;     // becomes: 3 + 3 * 2, which is 9, not 12</code></pre>
+  <p>The fix is parentheses everywhere, <code>#define DOUBLE(x) ((x) + (x))</code>, or better, an ordinary function, which modern compilers inline anyway.</p>
+
+  <div class="problem" data-id="link-p1" data-answer="5|five">
+    <span class="qtag">Practice 1</span>
+    <p class="q">With <code>#define SQUARE(x) x * x</code>, what is <code>SQUARE(1 + 2)</code>?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Paste the text in literally: x becomes <code>1 + 2</code> in both places. Then apply normal precedence.</details>
+    <div class="solution" hidden><p>It becomes <code>1 + 2 * 1 + 2</code>, and multiplication goes first: 1 + 2 + 2 = <strong>5</strong>, not 9. With <code>#define SQUARE(x) ((x) * (x))</code> it would be <code>((1 + 2) * (1 + 2))</code> = 9.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="units">Separate compilation</h2>
+  <p>Each <code>.c</code> file is compiled on its own, with no knowledge of the others. So how does <code>main.c</code> call <code>square</code>, which lives in <code>util.c</code>? Through a <span class="hl">declaration</span> in the header: <code>int square(int x);</code> tells the compiler the function exists and what types it takes, without saying how it works. The <span class="hl">definition</span>, the body, appears in exactly one <code>.c</code> file.</p>
+  <p>The compiler turns each file into an <span class="hl">object file</span> (<code>.o</code>): machine code with blanks where it needs things from elsewhere, plus a table of <em>symbols</em>, the names it defines and the names it needs. <code>nm</code> lists them: <code>T</code> means a function defined here, <code>B</code> a global variable defined here, and <code>U</code> an undefined name someone else must supply.</p>
+  <p>Separate compilation is what makes big projects practical. Change one file and only that file is recompiled; build tools like <code>make</code> track which outputs are out of date. Linux has tens of thousands of <code>.c</code> files, and nobody recompiles them all to fix one line.</p>
+
+  <div class="mcq" data-id="link-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">In <code>nm main.o</code>, <code>square</code> is listed with a <code>U</code>. What does that mean?</p>
+    <div class="choices">
+      <button type="button" data-why="Unused code would be removed or simply not listed; U is about where the definition is.">square is unused</button>
+      <button type="button" data-why="Errors appear when linking fails, not as a symbol letter.">square has an error in it</button>
+      <button type="button">main.o uses square, but its definition must come from another object file or library</button>
+      <button type="button" data-why="It's the opposite: U means not defined here.">square is defined in main.o</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Undefined here, needed from elsewhere.</strong> In <code>util.o</code>, the same name appears with a <code>T</code>: defined in the text (code) section. The linker's job is to match every U with exactly one definition.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="linker">The linker</h2>
+  <p>The <span class="hl">linker</span> (<code>ld</code>) combines object files into one executable. It matches every undefined symbol to its definition, lays out all the code and data at final addresses, and fills in the blanks with those addresses (relocation). Two errors come straight from that job. Try them:</p>
+  <div class="link-try" id="link-try"></div>
+<pre><code id="link-out"></code></pre>
+  <p>"Undefined reference" means nothing you gave the linker defines that name: usually a missing file or library on the command line (or a typo). "Multiple definition" means two files define the same name; often a function body was put in a header that two files include.</p>
+
+  <div class="mcq" data-id="link-q2" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">A build fails with <code>undefined reference to `sqrt'</code>, though the code includes <code>&lt;math.h&gt;</code>. What's the likely fix?</p>
+    <div class="choices">
+      <button type="button">Link the math library by adding <code>-lm</code> to the command</button>
+      <button type="button" data-why="The include gives the declaration, which is why compiling succeeded. The missing part is the definition at link time.">Include &lt;math.h&gt; a second time</button>
+      <button type="button" data-why="That would cause a multiple definition if the library were also linked; the real fix is linking the library.">Write your own sqrt in the same file</button>
+      <button type="button" data-why="Optimization levels don't supply missing definitions.">Compile with -O2</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>The header only <em>declares</em> <code>sqrt</code>; the definition lives in the math library, which on Linux you link with <strong><code>-lm</code></strong>. Compiler errors are about declarations and types; linker errors are about missing or duplicate definitions.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="libs">Static and dynamic libraries</h2>
+  <p>A <span class="hl">library</span> is a bundle of object files. With <strong>static linking</strong> (<code>.a</code> on Linux, <code>.lib</code> on Windows), the linker copies the needed code into your executable. The program is self-contained but bigger, and fixing a bug in the library means rebuilding every program that used it.</p>
+  <p>With <strong>dynamic linking</strong> (<code>.so</code> on Linux, <code>.dll</code> on Windows, <code>.dylib</code> on macOS), the executable only records the library's name. The code is found and connected when the program starts. Every program on the machine shares one copy in memory, and one update to the library fixes all of them at once. The cost: the program depends on the right version being installed, the old Windows complaint known as "DLL hell". <code>printf</code> in our example comes from the C standard library, which is almost always linked dynamically.</p>
+
+  <div class="mcq" data-id="link-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">A security flaw is found in a widely used compression library. Which programs get the fix just by updating the library's file on the system?</p>
+    <div class="choices">
+      <button type="button" data-why="Statically linked programs carry their own copy of the old code inside them.">Programs that linked it statically</button>
+      <button type="button" data-why="Only the dynamically linked ones read the library file when they start.">Every program, however it was built</button>
+      <button type="button" data-why="Dynamically linked programs pick up the new file the next time they start.">None; every program must be recompiled</button>
+      <button type="button">Programs that link it dynamically, once they restart</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Dynamically linked programs</strong>, after a restart. Statically linked ones keep the vulnerable copy until they're rebuilt. That's a big reason Linux distributions prefer dynamic linking, and it cuts both ways, as the story below shows.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="loader">The loader</h2>
+  <p>When you run a program, the operating system's <span class="hl">loader</span> reads the executable file (ELF format on Linux, PE on Windows, Mach-O on macOS), maps its code and data into a new process's memory (the layout from lesson 2), and hands off to the dynamic linker to find and connect the shared libraries. Then it jumps to the program's entry point, a small startup routine called <code>_start</code> that sets up the C runtime and calls your <code>main</code>. When <code>main</code> returns, that routine passes your return value back to the operating system as the exit code.</p>
+  <p>Other languages shift these steps around. Java compiles to bytecode in <code>.class</code> files and links classes as they're first used, while running. Python compiles each module to bytecode (cached in <code>.pyc</code> files) when it's imported. Go and Rust link almost everything statically into a single executable, which is a big part of why they're easy to deploy.</p>
+
+  <div class="problem" data-id="link-p2" data-answer="4|four">
+    <span class="qtag">Practice 2</span>
+    <p class="q">How many separate tools does <code>gcc main.c util.c -o app</code> run to build the program (not counting the loader, which runs when you start it)?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Count the stages in the panel before "Load".</details>
+    <div class="solution" hidden><p><strong>4</strong>: preprocessor, compiler, assembler, and linker. (Modern GCC folds the preprocessor into the compiler program, but it's still a separate step.)</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>The XZ Utils backdoor, 2024</h3>
+    <p>On March 29, 2024, a Microsoft engineer, Andres Freund, noticed that SSH logins on a test machine were taking about half a second longer than usual and using too much CPU. He traced it to liblzma, a compression library from the XZ Utils project. Over two years, someone using the name "Jia Tan" had become a trusted maintainer of the project and hidden a backdoor in its build files and test data. The SSH server never used compression itself, but on several Linux distributions it was dynamically linked against a system library that loaded liblzma, and the malicious code used the dynamic linker's startup process to hook SSH's authentication. The backdoored versions had only reached testing and early releases, so the major stable releases were never affected. Dynamic linking spreads fixes instantly; it can spread compromises too.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Building C runs four stages: preprocess (text substitution), compile (to assembly), assemble (to object files), link (to an executable).</li>
+    <li>Macros are text; parenthesize them, or use functions.</li>
+    <li>Headers hold declarations; one <code>.c</code> file holds each definition. Object files list defined (T, B) and undefined (U) symbols.</li>
+    <li>"Undefined reference": a definition is missing from the link. "Multiple definition": there are two.</li>
+    <li>Static linking copies library code in; dynamic linking connects shared libraries at startup. The loader maps the program and calls <code>main</code>.</li>
+  </ul>
+
+  <h3>Try it yourself</h3>
+<pre><code>gcc -E main.c | tail          # see the preprocessed text (SQUARE_LIMIT is gone)
+gcc -S main.c                 # main.s: assembly
+gcc -c main.c util.c          # main.o and util.o: object files
+nm main.o util.o              # their symbols
+gcc main.o util.o -o app      # link
+ldd ./app                     # Linux: the shared libraries it will load</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 5</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="linking">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Measuring and improving performance</strong>, the last lesson of the stage.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.cs.cmu.edu/~213/" target="_blank" rel="noopener">CMU 15-213: Introduction to Computer Systems</a><span>The linking lecture: symbols, relocation, static and shared libraries, and library interposition.</span></li>
+      <li><a href="https://gcc.gnu.org/onlinedocs/gcc/Overall-Options.html" target="_blank" rel="noopener">GCC manual: Options controlling the kind of output</a><span>The -E, -S, -c, and -o options, and how gcc runs each stage.</span></li>
+      <li><a href="https://gcc.gnu.org/onlinedocs/cpp/" target="_blank" rel="noopener">The C preprocessor (GCC manual)</a><span>Macros, includes, conditionals, and the pitfalls the manual itself warns about.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Linker_(computing)" target="_blank" rel="noopener">Linker (Wikipedia)</a><span>Symbol resolution, relocation, and static versus dynamic linking.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Executable_and_Linkable_Format" target="_blank" rel="noopener">Executable and Linkable Format (Wikipedia)</a><span>What's inside a Linux executable, with a diagram of its sections.</span></li>
+      <li><a href="https://www.openwall.com/lists/oss-security/2024/03/29/4" target="_blank" rel="noopener">Andres Freund: backdoor in upstream xz/liblzma</a><span>The original disclosure email, including the timing measurements that gave it away.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/XZ_Utils_backdoor" target="_blank" rel="noopener">XZ Utils backdoor (Wikipedia)</a><span>The full timeline of the two-year social engineering campaign.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Build pipeline explorer and linker error demo. Outputs captured from GCC 15 and GNU binutils;
+  // Windows-only section entries and long paths are trimmed.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const STAGES = {
+      'Preprocess': { cmd: 'gcc -E main.c', what: 'Pastes in every #include and replaces every macro. The output is still C, just much longer: these 9 lines become about 1,500, almost all of them from stdio.h.', out: '... about 1,500 lines of declarations from stdio.h ...\nint square(int x);\n\nint main(void) {\n    int y = square(7);\n    if (y < 100)\n        printf("%d\\n", y);\n    return 0;\n}' },
+      'Compile': { cmd: 'gcc -S main.c', what: 'Translates the preprocessed C into assembly for one CPU, the language of the last lesson. This is where type errors and syntax errors are reported.', out: 'main:                     ; gcc -O1, with a Windows-only startup call removed\n    sub  rsp, 8\n    mov  edi, 7\n    call square           ; address not known yet\n    cmp  eax, 99\n    jle  .L4              ; y <= 99 means y < 100: go print\n.L2:\n    mov  eax, 0           ; return 0\n    add  rsp, 8\n    ret\n.L4:\n    mov  esi, eax         ; second argument: y\n    lea  rdi, .LC0[rip]   ; first argument: the "%d\\n" string\n    mov  eax, 0\n    call printf           ; address not known yet\n    jmp  .L2' },
+      'Assemble': { cmd: 'gcc -c main.c util.c', what: 'Turns assembly into machine code: an object file per source file. Calls to square and printf are left as blanks, recorded in a symbol table that nm can list.', out: '$ nm main.o\n0000000000000000 T main\n                 U printf\n                 U square\n\n$ nm util.o\n0000000000000000 B calls\n0000000000000000 T square' },
+      'Link': { cmd: 'gcc main.o util.o -o app', what: 'Matches each U with a definition: square from util.o, printf from the C library. Then it gives everything a final address and fills in the blanks.', out: 'main.o needs:  square  -> found in util.o (T)\n               printf  -> found in the C library (shared)\nutil.o needs:  nothing\n\nresult: app, one executable file' },
+      'Load and run': { cmd: './app', what: 'The operating system maps app into a new process, the dynamic linker connects the C library, and the startup code calls main. square(7) is 49, which is under 100, so it prints.', out: '$ ./app\n49' },
+    };
+    let cur = 'Preprocess';
+    Object.keys(STAGES).forEach((k, i) => {
+      if (i) { const s = document.createElement('span'); s.className = 'to'; s.textContent = '→'; $('pipeline').append(s); }
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = k; b.setAttribute('aria-pressed', k === cur);
+      b.onclick = () => { cur = k; $('pipeline').querySelectorAll('button').forEach(c => c.setAttribute('aria-pressed', c === b)); render(); };
+      $('pipeline').append(b);
+    });
+    function render() {
+      const s = STAGES[cur];
+      $('stage').innerHTML = `<h4>${cur}: <code>${esc(s.cmd)}</code></h4><p>${s.what}</p><pre><code>${esc(s.out)}</code></pre>`;
+    }
+    const TRIES = {
+      'Forget util.o': { cmd: '$ gcc main.o -o app', out: "ld: main.o: in function `main':\nmain.c:(.text+0x13): undefined reference to `square'\ncollect2: error: ld returned 1 exit status", err: true },
+      'Add a second square': { cmd: '$ gcc main.o util.o dup.c -o app       # dup.c also defines square', out: "ld: dup.o:dup.c:(.text+0x0): multiple definition of `square';\n    util.o:util.c:(.text+0x0): first defined here\ncollect2: error: ld returned 1 exit status", err: true },
+      'Link correctly': { cmd: '$ gcc main.o util.o -o app && ./app', out: '49', err: false },
+    };
+    Object.keys(TRIES).forEach(k => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn quiet'; b.textContent = k;
+      b.onclick = () => { const t = TRIES[k]; $('link-out').innerHTML = `${esc(t.cmd)}\n<span class="${t.err ? 'err' : ''}">${esc(t.out)}</span>`; };
+      $('link-try').append(b);
+    });
+    $('link-out').textContent = 'Pick one of the builds above.';
+    render();
+  })();
+</script>
+</body>
+</html>

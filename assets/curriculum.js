@@ -50,7 +50,7 @@ window.CURRICULUM = [
       { id: 'memory', title: 'The stack and the heap', href: 'lessons/20-stack-and-heap.html', minutes: 40 },
       { id: 'caches', title: 'The memory hierarchy and caches', href: 'lessons/21-caches.html', minutes: 40 },
       { id: 'assembly', title: 'Reading assembly', href: 'lessons/22-assembly.html', minutes: 45 },
-      { id: 'linking', title: 'From source code to running program' },
+      { id: 'linking', title: 'From source code to running program', href: 'lessons/23-compiling-and-linking.html', minutes: 40 },
       { id: 'performance', title: 'Measuring and improving performance' },
     ],
   },
