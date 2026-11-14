@@ -31,7 +31,18 @@
   .stop:not(.current):not(.done) h3 { color: var(--ink-2); }
   .stop p { margin: 0 0 .3rem; max-width: 60ch; }
   .stop .src { font: .85rem var(--sans); color: var(--pencil); }
-  .lessons { list-style: none; padding: 0; margin: 1rem 0 0; font-family: var(--sans); border: 1.5px solid var(--ink); border-radius: 8px; background: var(--panel); overflow: hidden; }
+  /* Each stage's lesson list folds away; all start closed so the route stays short. */
+  .stage-lessons { margin-top: .7rem; }
+  .stage-lessons summary { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; list-style: none;
+    font: 600 .92rem var(--sans); padding: .35rem .8rem; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--panel); }
+  .stage-lessons summary::-webkit-details-marker { display: none; }
+  .stage-lessons summary::before { content: ''; width: .45rem; height: .45rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg); transition: transform .15s; }
+  .stage-lessons[open] summary::before { transform: rotate(45deg); }
+  .stage-lessons summary:hover { background: var(--hl); color: var(--hl-ink); }
+  .stage-lessons summary .count { font-weight: 400; color: var(--ink-2); }
+  .stage-lessons summary:hover .count { color: var(--hl-ink); }
+  .lessons { list-style: none; padding: 0; margin: .7rem 0 0; font-family: var(--sans); border: 1.5px solid var(--ink); border-radius: 8px; background: var(--panel); overflow: hidden; }
   .lessons li { display: flex; gap: .8rem; align-items: baseline; padding: .7rem 1rem; border-bottom: 1px solid var(--rule); }
   .lessons li:last-child { border-bottom: 0; }
   .lessons .n { font-weight: 700; color: var(--pencil); font-variant-numeric: tabular-nums; min-width: 1.6em; }
@@ -93,11 +104,17 @@
       ? `<div><small>${Object.keys(s.solved).length ? 'Up next' : 'Start here'}</small><strong>${next.title}</strong></div><a class="btn" href="${next.href}">${Object.keys(s.solved).length ? 'Continue lesson' : 'Start lesson'}</a>`
       : `<div><small>All written lessons finished</small><strong>New lessons are on the way.</strong></div>`;
 
-    document.getElementById('route').innerHTML = CURRICULUM.map((st, i) => {
+    // Re-rendering (after progress changes) must not snap open stages shut.
+    const route = document.getElementById('route');
+    const open = new Set([...route.querySelectorAll('details[open]')].map(d => d.dataset.stage));
+    route.innerHTML = CURRICULUM.map((st, i) => {
       const cls = stageDone(st) ? 'done' : i === current ? 'current' : '';
-      const lessons = st.lessons ? `<ol class="lessons">${st.lessons.map((l, j) => `
+      const finished = st.lessons ? st.lessons.filter(l => s.lessons[l.id]).length : 0;
+      const lessons = st.lessons ? `<details class="stage-lessons" data-stage="${i}"${open.has(String(i)) ? ' open' : ''}>
+        <summary>Lessons <span class="count">${st.lessons.length} lessons, ${finished} finished</span></summary>
+        <ol class="lessons">${st.lessons.map((l, j) => `
         <li><span class="n">${j + 1}</span>${l.href ? `<a href="${l.href}">${l.title}</a>` : `<span class="planned">${l.title}</span>`}
-        <span class="meta">${s.lessons[l.id] ? 'Finished' : l.href ? `${l.minutes} min` : 'Coming soon'}</span></li>`).join('')}</ol>` : '';
+        <span class="meta">${s.lessons[l.id] ? 'Finished' : l.href ? `${l.minutes} min` : 'Coming soon'}</span></li>`).join('')}</ol></details>` : '';
       return `<li class="stop ${cls}"><span class="dot" aria-hidden="true">${i + 1}</span>
         <h3>Stage ${i + 1}: ${st.title}</h3><p>${st.summary}</p>
         <div class="src">Draws on ${st.sources.join(', ')}</div>${lessons}</li>`;
