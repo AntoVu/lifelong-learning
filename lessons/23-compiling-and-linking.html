@@ -177,7 +177,7 @@ int n = DOUBLE(3) * 2;     // becomes: 3 + 3 * 2, which is 9, not 12</code></pre
   <h2>When this goes wrong</h2>
   <div class="story">
     <h3>The XZ Utils backdoor, 2024</h3>
-    <p>On March 29, 2024, a Microsoft engineer, Andres Freund, noticed that SSH logins on a test machine were taking about half a second longer than usual and using too much CPU. He traced it to liblzma, a compression library from the XZ Utils project. Over two years, someone using the name "Jia Tan" had become a trusted maintainer of the project and hidden a backdoor in its build files and test data. The SSH server never used compression itself, but on several Linux distributions it was dynamically linked against a system library that loaded liblzma, and the malicious code used the dynamic linker's startup process to hook SSH's authentication. The backdoored versions had only reached testing and early releases, so the major stable releases were never affected. Dynamic linking spreads fixes instantly; it can spread compromises too.</p>
+    <p>On March 29, 2024, a Microsoft engineer, Andres Freund, noticed that SSH logins on a test machine were taking about half a second longer than usual and using too much CPU. Freund traced it to liblzma, a compression library from the XZ Utils project. Over two years, someone using the name "Jia Tan" had become a trusted maintainer of the project and hidden a backdoor in its build files and test data. The SSH server never used compression itself, but on several Linux distributions it was dynamically linked against a system library that loaded liblzma, and the malicious code used the dynamic linker's startup process to hook SSH's authentication. The backdoored versions had only reached testing and early releases, so the major stable releases were never affected. Dynamic linking spreads fixes instantly; it can spread compromises too.</p>
   </div>
 
   <h2>What to remember</h2>
@@ -201,7 +201,7 @@ ldd ./app                     # Linux: the shared libraries it will load</code><
     <h2 style="margin-top:0">Finish lesson 5</h2>
     <p class="finish-note"></p>
     <button class="btn" type="button" data-finish="linking">Finish lesson</button>
-    <p style="margin:1.2rem 0 0">Next: <strong>Measuring and improving performance</strong>, the last lesson of the stage.</p>
+    <p style="margin:1.2rem 0 0">Next: <a href="24-performance.html"><strong>Measuring and improving performance</strong></a>, the last lesson of the stage.</p>
   </section>
 
   <section class="refs" aria-labelledby="refs-title">

@@ -72,3 +72,11 @@ test('stage-3 achievement needs every stage 3 lesson finished', () => {
   P.completeLesson(s, 'dp', false, '2026-10-29');
   assert.ok(P.checkAchievements(s, '2026-10-29').includes('stage-3'));
 });
+
+test('stage-4 achievement needs every stage 4 lesson finished', () => {
+  const s = P.fresh();
+  ['c-pointers', 'memory', 'caches', 'assembly', 'linking'].forEach(id => P.completeLesson(s, id, false, '2026-11-14'));
+  assert.ok(!P.checkAchievements(s, '2026-11-14').includes('stage-4'));
+  P.completeLesson(s, 'performance', false, '2026-11-14');
+  assert.ok(P.checkAchievements(s, '2026-11-14').includes('stage-4'));
+});

@@ -250,7 +250,7 @@ for x in items:
   <h2>When this goes wrong</h2>
   <div class="story">
     <h3>GTA Online's six-minute load screen, 2021</h3>
-    <p>For years, players of GTA Online waited several minutes for the game to load. In 2021 a player who goes by t0st profiled it without the source code and found the CPU spending about four minutes on a 10-megabyte JSON file with some 63,000 entries. There were two accidentally quadratic steps. The parser called <code>sscanf</code> for each value, and <code>sscanf</code> measured the length of the entire remaining 10 MB string every time. Then, to avoid duplicates, each of the 63,000 items was checked against every item already stored, about two billion comparisons, where a hash table would have needed 63,000 lookups. A small patch cut t0st's load time from about six minutes to under two. Rockstar confirmed the bug, shipped a fix, and paid him a $10,000 bug bounty.</p>
+    <p>For years, players of GTA Online waited several minutes for the game to load. In 2021 a player who goes by t0st profiled it without the source code and found the CPU spending about four minutes on a 10-megabyte JSON file with some 63,000 entries. There were two accidentally quadratic steps. The parser called <code>sscanf</code> for each value, and <code>sscanf</code> measured the length of the entire remaining 10 MB string every time. Then, to avoid duplicates, each of the 63,000 items was checked against every item already stored, about two billion comparisons, where a hash table would have needed 63,000 lookups. A small patch cut t0st's load time from about six minutes to under two. Rockstar confirmed the bug, shipped a fix, and paid t0st a $10,000 bug bounty.</p>
   </div>
 
   <h2>What to remember</h2>

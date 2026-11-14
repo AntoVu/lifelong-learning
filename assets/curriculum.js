@@ -51,7 +51,7 @@ window.CURRICULUM = [
       { id: 'caches', title: 'The memory hierarchy and caches', href: 'lessons/21-caches.html', minutes: 40 },
       { id: 'assembly', title: 'Reading assembly', href: 'lessons/22-assembly.html', minutes: 45 },
       { id: 'linking', title: 'From source code to running program', href: 'lessons/23-compiling-and-linking.html', minutes: 40 },
-      { id: 'performance', title: 'Measuring and improving performance' },
+      { id: 'performance', title: 'Measuring and improving performance', href: 'lessons/24-performance.html', minutes: 40 },
     ],
   },
   { title: 'Operating systems and concurrency', summary: 'Processes, threads, scheduling, virtual memory, file systems, and locks.', sources: ['MIT 6.1810', 'Berkeley CS162', 'OSTEP'] },

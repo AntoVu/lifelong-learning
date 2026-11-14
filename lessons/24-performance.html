@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Measuring and improving performance | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .prof { display: grid; gap: .45rem; margin: .8rem 0; }
+  .prow { display: grid; grid-template-columns: 7.5rem 1fr 11rem; gap: .7rem; align-items: center; font: .9rem var(--sans); }
+  .prow b { font: 600 .9rem var(--mono); }
+  .ptrack { height: 1.5rem; background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; position: relative; overflow: hidden; }
+  .pfill { position: absolute; inset: 0 auto 0 0; background: var(--ink-2); transition: width .3s; }
+  .pfill.fast { background: var(--hl); border-right: 2px solid var(--ink); }
+  .ptrack .lbl { position: absolute; top: 50%; transform: translateY(-50%); font: 600 .78rem var(--mono); color: var(--ink); white-space: nowrap; transition: left .3s; }
+  .prow select { font: .85rem var(--sans); padding: .25rem; border: 1.5px solid var(--ink); border-radius: 5px; background: var(--paper); color: var(--ink); }
+  .ptotal { display: flex; flex-wrap: wrap; gap: .3rem 1.5rem; font: .95rem var(--sans); margin: .4rem 0 0; }
+  .ptotal b { font-family: var(--mono); font-size: 1.05rem; }
+  .amdahl { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px dashed var(--rule); }
+  .amdahl label { font: .9rem var(--sans); display: grid; grid-template-columns: 15rem 1fr 4rem; gap: .6rem; align-items: center; margin: .3rem 0; }
+  .amdahl input { accent-color: var(--ink); }
+  .amdahl output { font: 700 .95rem var(--mono); }
+  .amdahl p { font: .95rem var(--sans); margin: .5rem 0 0; }
+  @media (max-width: 600px) { .prow { grid-template-columns: 1fr; gap: .25rem; } .amdahl label { grid-template-columns: 1fr 3.5rem; } .amdahl label span { grid-column: 1 / -1; } }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 4: Computer systems, lesson 6 of 6</div>
+    <h1>Measuring and improving performance</h1>
+    <p class="lede">Every lesson in this stage has been about why code runs fast or slow. This last one is about what to do about it: how to measure honestly, how to find the part that matters, and how much speedup is even possible. The answers are often surprising.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="pf-title">
+    <h2 id="pf-title" style="margin-top:0;font-size:1.25rem">Where should you optimize?</h2>
+    <div class="try">A profiler says this 100-second job spends its time in three functions. Choose how much faster to make each one and watch the total. Then use the sliders below to explore the rule behind it.</div>
+    <div class="prof" id="prof"></div>
+    <div class="ptotal" id="ptotal" aria-live="polite"></div>
+    <div class="amdahl">
+      <label><span>Share of time in the part you speed up</span><input type="range" id="am-p" min="0" max="100" value="90"><output id="am-p-out"></output></label>
+      <label><span>How much faster that part gets</span><input type="range" id="am-s" min="1" max="100" value="10"><output id="am-s-out"></output></label>
+      <p id="am-out" aria-live="polite"></p>
+    </div>
+  </section>
+  <p>Making <code>log_results</code> 100 times faster saves under 10 seconds. Making <code>parse_input</code> just twice as fast saves 30. The part you don't speed up sets a hard limit on the whole, and that limit is the most important idea in performance work.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain why you measure before optimizing.</li>
+      <li>Time code properly and avoid common benchmarking traps.</li>
+      <li>Use a profiler and read a flame graph to find where time goes.</li>
+      <li>Use Amdahl's law to predict the best possible speedup.</li>
+      <li>Rank optimizations by how much they usually help.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#measure">Measure first</a></li>
+      <li><a href="#timing">Timing honestly</a></li>
+      <li><a href="#profilers">Profilers and flame graphs</a></li>
+      <li><a href="#amdahl">Amdahl's law</a></li>
+      <li><a href="#order">What to try, in order</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="measure">Measure first</h2>
+  <p>Programmers are famously bad at guessing where their programs spend time. The slow part is usually somewhere you didn't expect: a quadratic loop buried in a helper, a database call inside a loop, or, as in GTA Online's loading screen, a library function that does far more work than its name suggests. Donald Knuth put it in a 1974 paper:</p>
+  <div class="callout"><p>"We should forget about small efficiencies, say about 97% of the time: premature optimization is the root of all evil. Yet we should not pass up our opportunities in that critical 3%."</p></div>
+  <p>The second sentence matters as much as the first. The point isn't "never optimize"; it's "find the critical 3% by measuring, then optimize that". Clever code everywhere else just makes the program harder to read and fix.</p>
+
+  <div class="mcq" data-id="perf-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">Users say a web page is slow. What should you do first?</p>
+    <div class="choices">
+      <button type="button" data-why="It might be the right fix, but you don't know yet where the time goes.">Rewrite the slowest-looking function in C</button>
+      <button type="button">Measure: time the request and profile it to see where the time goes</button>
+      <button type="button" data-why="More hardware helps a little at a cost, and does nothing for a quadratic loop.">Add more servers</button>
+      <button type="button" data-why="Compiler flags rarely fix a slow page; the problem is usually elsewhere.">Turn on every compiler optimization flag</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Measure.</strong> Very often the answer is a database query or a network call, and no amount of tuning the code you suspected would have helped.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="timing">Timing honestly</h2>
+  <p>Measuring sounds easy, but benchmarks lie in predictable ways:</p>
+  <ul>
+    <li><strong>Noise.</strong> Other programs, power saving, and CPU temperature change the result from run to run. Run many times and look at the spread, not one number.</li>
+    <li><strong>Warm-up.</strong> The first run pays for loading code, filling caches, and (in Java or JavaScript) the just-in-time compiler. Time steady-state runs separately.</li>
+    <li><strong>Dead code.</strong> If a benchmark computes a result and never uses it, an optimizing compiler may delete the whole computation, and your loop "runs" in zero seconds.</li>
+    <li><strong>Unrealistic data.</strong> Sorting already-sorted data, or reading the same small file every time so it's always cached, measures a case your users never hit.</li>
+  </ul>
+  <p>Python's <code>timeit</code> module handles the first two for small snippets: it runs your code many times and turns off garbage collection during the measurement.</p>
+
+  <div class="mcq" data-id="perf-q2" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">A C benchmark of a hash function reports that a billion calls took 0.0 seconds at -O2. What most likely happened?</p>
+    <div class="choices">
+      <button type="button" data-why="Nothing computes a billion hashes in zero time.">The hash function is extremely fast</button>
+      <button type="button" data-why="The timer works; it measured what actually ran, which was nothing.">The timer is broken</button>
+      <button type="button" data-why="Caches make things faster, not instant.">The results were all cached</button>
+      <button type="button">The results were never used, so the compiler removed the calls</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Dead code elimination.</strong> Under the as-if rule from lesson 4, unused work can vanish. Benchmarks fix this by using the results, for example adding them up and printing the total.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="profilers">Profilers and flame graphs</h2>
+  <p>A <span class="hl">profiler</span> tells you where time goes. A <em>sampling</em> profiler, like Linux's <code>perf</code> or Python's <code>py-spy</code>, interrupts the program thousands of times a second and records the call stack each time. Functions that appear in many samples are where the time is spent. Its overhead is low enough to use on production systems. A <em>tracing</em> profiler, like Python's built-in <code>cProfile</code>, records every call: exact counts, but more slowdown.</p>
+  <p>The standard way to view samples is a <span class="hl">flame graph</span>. Each box is a function; boxes stacked on top of it are the functions it called; and a box's width is the share of samples that included it. Wide boxes are where the time goes. Read it from the bottom up, and look for wide plateaus near the top: that's code spending time itself rather than calling something else.</p>
+
+  <div class="mcq" data-id="perf-q3" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">In a flame graph, what does a box's width tell you?</p>
+    <div class="choices">
+      <button type="button">How much of the total time was spent in that function and everything it called</button>
+      <button type="button" data-why="The left-to-right order is usually alphabetical, not chronological.">When the function ran</button>
+      <button type="button" data-why="Width is about time samples, not code size.">How many lines of code the function has</button>
+      <button type="button" data-why="Call depth is shown by height, not width.">How deep the function is in the call stack</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Share of total time</strong>, including its callees. The x-axis isn't time order; boxes are sorted so identical stacks merge into wide, readable shapes.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="amdahl">Amdahl's law</h2>
+  <p>In 1967, Gene Amdahl, an IBM computer architect, made a simple point that every performance engineer relies on. If a fraction <em>p</em> of the running time is sped up by a factor <em>s</em>, the overall speedup is:</p>
+<pre><code>speedup = 1 / ((1 − p) + p / s)</code></pre>
+  <p>The <code>(1 − p)</code> part, the time you didn't touch, never shrinks. So even if you make the sped-up part infinitely fast, the best you can do is <code>1 / (1 − p)</code>. Speed up 90% of a program by a factor of 10 and you get about 5.3 times overall, not 10. That's also why adding processors has limits: the part of a job that can't run in parallel caps the benefit of the rest (stage 5 picks this up).</p>
+
+  <div class="problem" data-id="perf-p1" data-answer="2|2x|2×|two">
+    <span class="qtag">Practice 1</span>
+    <p class="q">Half of a program's time is spent in one function. If you made that function infinitely fast, what is the best overall speedup?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="decimal" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The other half still takes the same time. 1 / (1 − p) with p = 0.5.</details>
+    <div class="solution" hidden><p><strong>2 times</strong>. The untouched half sets the limit, no matter what you do to the other half.</p></div>
+  </div>
+
+  <div class="problem" data-id="perf-p2" data-answer="5.3|5.26|5.263|5.3x">
+    <span class="qtag">Practice 2</span>
+    <p class="q">90% of the time is sped up 10 times. What is the overall speedup, to one decimal place?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="decimal" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>1 / (0.1 + 0.9 / 10) = 1 / (0.1 + 0.09).</details>
+    <div class="solution" hidden><p>1 / 0.19 ≈ <strong>5.3</strong>. Try it on the sliders. Notice the remaining 10% now takes more than half of the new running time: it's become the next thing to profile.</p></div>
+  </div>
+
+  <div class="problem" data-id="perf-p3" data-answer="85|85s">
+    <span class="qtag">Practice 3</span>
+    <p class="q">In the panel's 100-second job (parse 60 s, compute 30 s, log 10 s), you make <code>compute</code> twice as fast and change nothing else. How many seconds does the job take now?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Only the 30 seconds changes.</details>
+    <div class="solution" hidden><p>60 + 15 + 10 = <strong>85</strong> seconds: a 1.18 times speedup. Doubling <code>parse_input</code> instead would give 70 seconds.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="order">What to try, in order</h2>
+  <p>Once you know where the time goes, the fixes that usually pay off most come in roughly this order:</p>
+  <ol>
+    <li><strong>A better algorithm or data structure</strong> (stage 3). Going from O(n²) to O(n log n) can mean a thousand times faster; nothing else on this list comes close.</li>
+    <li><strong>Avoid the work entirely.</strong> Cache results, skip unneeded steps, batch many small database or network calls into one.</li>
+    <li><strong>Better memory access</strong> (lesson 3): arrays over linked structures, data used together stored together.</li>
+    <li><strong>Let the compiler and libraries help</strong>: build with optimizations on, and in Python, push loops into NumPy or other compiled libraries.</li>
+    <li><strong>Parallelism</strong>: multiple cores (stage 5) or vector instructions, within Amdahl's limit.</li>
+    <li><strong>Micro-optimizations</strong>, only in the hottest few lines, and only with a measurement showing they help.</li>
+  </ol>
+  <p>And after every change, measure again. Optimizations often help less than expected, sometimes make things slower, and always make the code harder to change.</p>
+
+  <div class="mcq" data-id="perf-q4" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">A profiler shows 95% of a program's time in a function that checks every pair of 50,000 records for duplicates. Which change is likely to help most?</p>
+    <div class="choices">
+      <button type="button" data-why="Faster comparisons help by a constant factor; the algorithm is still about 1.25 billion comparisons.">Rewrite the comparison in a faster language</button>
+      <button type="button" data-why="Eight cores give at most 8 times, while the algorithmic fix gives far more.">Split the work across 8 cores</button>
+      <button type="button">Put each record's key in a set and check membership instead of comparing every pair</button>
+      <button type="button" data-why="The flags help a little; the quadratic algorithm is the real cost.">Compile with -O3</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Change the algorithm.</strong> O(n²) to O(n): from about 1.25 billion comparisons to 50,000 set operations. That's the GTA Online fix again. The other options are all real but much smaller wins.</p></div>
+  </div>
+
+  <h2>Where this idea comes from</h2>
+  <div class="story">
+    <h3>The first flame graph, 2011</h3>
+    <p>Brendan Gregg, a performance engineer then working at Joyent, was investigating a MySQL performance problem and kept getting profiler output that was walls of text: thousands of call stacks, each with a count. Gregg tried drawing them, first with time along the bottom, which was too dense to read, then dropped time order, sorted the stacks so identical ones merged, and colored the boxes in warm tones because they showed which CPUs were "hot". It looked like flames. Gregg released the tool in December 2011, and flame graphs are now built into profilers for nearly every language and into browser developer tools. The lesson behind them is the one this whole lesson argues: you can't fix what you can't see.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Measure before optimizing. Find the critical 3%; leave the rest readable.</li>
+    <li>Benchmarks lie through noise, warm-up, dead code, and unrealistic data. Repeat runs and use the results.</li>
+    <li>Sampling profilers and flame graphs show where time goes. Wide boxes are what matter.</li>
+    <li>Amdahl's law: overall speedup = 1 / ((1 − p) + p / s). The untouched part sets the limit.</li>
+    <li>Algorithms first, then avoiding work, memory access, compilers and libraries, parallelism, and only then micro-tuning.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>Profile a program with the standard library, sorted by total time:</p>
+<pre><code>import cProfile
+
+def slow_unique(items):
+    seen = []
+    for x in items:
+        if x not in seen:          # O(n) scan inside a loop
+            seen.append(x)
+    return seen
+
+cProfile.run("slow_unique(list(range(20_000)))", sort="cumulative")
+# Then swap seen = [] for a set, and run it again.</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 6</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="performance">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">That's the end of stage 4. You've seen what your code becomes, where its data lives, and why it's fast or slow. Stage 5, <strong>Operating systems and concurrency</strong>, looks at the program that runs all the others.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://www.cs.cmu.edu/~213/" target="_blank" rel="noopener">CMU 15-213: Introduction to Computer Systems</a><span>The program optimization lecture: what compilers can and can't do, and how to help them.</span></li>
+      <li><a href="https://www.brendangregg.com/flamegraphs.html" target="_blank" rel="noopener">Brendan Gregg: Flame graphs</a><span>The inventor's explanation, with examples and the original story.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Amdahl%27s_law" target="_blank" rel="noopener">Amdahl's law (Wikipedia)</a><span>The formula, its derivation, and Gustafson's law, a more hopeful companion.</span></li>
+      <li><a href="https://docs.python.org/3/library/profile.html" target="_blank" rel="noopener">Python docs: The Python profilers</a><span>cProfile and pstats: running, sorting, and reading profiles.</span></li>
+      <li><a href="https://docs.python.org/3/library/timeit.html" target="_blank" rel="noopener">Python docs: timeit</a><span>Timing small snippets reliably.</span></li>
+      <li><a href="https://github.com/benfred/py-spy" target="_blank" rel="noopener">py-spy</a><span>A sampling profiler for Python that can attach to a running program and draw flame graphs.</span></li>
+      <li><a href="https://perfwiki.github.io/main/" target="_blank" rel="noopener">perf wiki</a><span>Linux's built-in profiler, for C and anything else running on the machine.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Profile what-if and Amdahl's law calculator.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const FNS = [['parse_input', 60], ['compute', 30], ['log_results', 10]];
+    const SPEEDS = [1, 2, 5, 10, 100];
+    const pick = FNS.map(() => 1);
+    $('prof').innerHTML = FNS.map(([n, t], i) => `<div class="prow"><b>${n}()</b><div class="ptrack"><div class="pfill" id="pf${i}"></div><span class="lbl" id="pl${i}"></span></div>
+      <select id="ps${i}" aria-label="Speedup for ${n}">${SPEEDS.map(s => `<option value="${s}">${s === 1 ? 'unchanged' : s + '× faster'}</option>`).join('')}</select></div>`).join('');
+    FNS.forEach((_, i) => { $('ps' + i).onchange = e => { pick[i] = +e.target.value; render(); }; });
+    const fmt = x => (Math.abs(x - Math.round(x)) < 1e-9 ? String(Math.round(x)) : x.toFixed(1));
+    function render() {
+      let total = 0;
+      FNS.forEach(([n, t], i) => {
+        const now = t / pick[i]; total += now;
+        const el = $('pf' + i);
+        el.style.width = now + '%'; el.classList.toggle('fast', pick[i] > 1);
+        $('pl' + i).textContent = `${fmt(now)} s`;
+        $('pl' + i).style.left = `calc(${now}% + .4rem)`;   // just past the end of the bar
+      });
+      $('ptotal').innerHTML = `<span>Total: <b>${fmt(total)} s</b> (was 100 s)</span><span>Overall speedup: <b>${(100 / total).toFixed(2)}×</b></span>`;
+    }
+    function amdahl() {
+      const p = $('am-p').value / 100, s = +$('am-s').value;
+      $('am-p-out').textContent = Math.round(p * 100) + '%';
+      $('am-s-out').textContent = s + '×';
+      const sp = 1 / ((1 - p) + p / s), lim = p < 1 ? 1 / (1 - p) : Infinity;
+      $('am-out').textContent = `Overall speedup: ${sp.toFixed(2)}×. Even with an infinitely fast part, the limit is ${lim === Infinity ? 'unbounded' : lim.toFixed(1) + '×'}, because ${Math.round((1 - p) * 100)}% of the time is untouched.`;
+    }
+    $('am-p').oninput = amdahl; $('am-s').oninput = amdahl;
+    render(); amdahl();
+  })();
+</script>
+</body>
+</html>
