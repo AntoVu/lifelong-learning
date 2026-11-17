@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Processes and system calls | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .fk-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: start; margin: .8rem 0 .4rem; }
+  @media (max-width: 700px) { .fk-grid { grid-template-columns: 1fr; } }
+  .fk-wrap { overflow-x: auto; background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; }
+  #fk { display: block; max-width: none; }
+  #fk line { stroke: var(--ink); stroke-width: 1.5; }
+  #fk rect { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+  #fk .new rect { fill: var(--hl); stroke-width: 2.5; }
+  #fk text { font: 600 11px var(--mono); text-anchor: middle; dominant-baseline: central; }
+  #fk .new text { fill: #1b2a41; }
+  #fk .col { font: 600 11px var(--sans); fill: var(--ink-2); }
+  .fk-out { font: .9rem var(--mono); margin: .6rem 0 0; min-height: 1.4em; overflow-wrap: anywhere; }
+  .fk-msg { font: .95rem var(--sans); margin: .4rem 0 .6rem; min-height: 2.8em; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 5: Operating systems and concurrency, lesson 1 of 6</div>
+    <h1>Processes and system calls</h1>
+    <p class="lede">Your laptop is running hundreds of programs at once, on a handful of CPU cores, and none of them can read another's memory or crash the machine. That's the operating system's work. This stage looks at how it does it, starting with its most basic idea: the process.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="fk-title">
+    <h2 id="fk-title" style="margin-top:0;font-size:1.25rem">Watch fork() multiply processes</h2>
+    <div class="try">On Unix, every new process starts as a copy of an existing one. Step through this program and watch the process tree grow. Each box is a process, labeled with its process ID.</div>
+    <div class="fk-grid">
+      <ol class="tr-code" id="fk-code"></ol>
+      <div class="fk-wrap"><svg id="fk" role="img" aria-label="Process tree"></svg></div>
+    </div>
+    <p class="fk-msg" id="fk-msg" aria-live="polite"></p>
+    <div class="tr-controls">
+      <button class="btn quiet" type="button" id="fk-back">Back</button>
+      <button class="btn" type="button" id="fk-next">Next line</button>
+    </div>
+    <p class="fk-out" id="fk-out"></p>
+  </section>
+  <p>Three calls to <code>fork()</code> make eight processes, and all eight run the <code>print</code>. Each fork doubles every process that reaches it, because the copy continues from the same line as the original. Running this exact program on Linux prints eight lines.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain what an operating system does, and the difference between kernel mode and user mode.</li>
+      <li>Describe a process: its memory, registers, and state.</li>
+      <li>Explain what a system call is and why programs need them.</li>
+      <li>Use <code>fork</code>, <code>exec</code>, and <code>wait</code>, and explain how a shell runs a command.</li>
+      <li>Explain how one CPU runs many processes by switching between them.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#os">What an operating system does</a></li>
+      <li><a href="#process">The process</a></li>
+      <li><a href="#syscalls">System calls</a></li>
+      <li><a href="#fork">fork, exec, and wait</a></li>
+      <li><a href="#switch">Switching between processes</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="os">What an operating system does</h2>
+  <p>The free OSTEP textbook, used in many university OS courses, sums up an operating system as three jobs:</p>
+  <ul>
+    <li><strong>Virtualization:</strong> give each program the illusion of its own CPU and its own memory, even though they all share one machine.</li>
+    <li><strong>Concurrency:</strong> let many things happen at once, safely.</li>
+    <li><strong>Persistence:</strong> keep data on disk, organized into files, across crashes and reboots.</li>
+  </ul>
+  <p>The core of the OS, the <span class="hl">kernel</span>, runs with special privileges. The CPU itself enforces two modes: in <strong>kernel mode</strong>, code can touch any memory and talk to hardware; in <strong>user mode</strong>, where your programs run, it can't. Any attempt to do something privileged from user mode, like reading another program's memory, triggers a fault that hands control to the kernel, which usually ends the offending program.</p>
+
+  <!-- 2 -->
+  <h2 id="process">The process</h2>
+  <p>A <span class="hl">process</span> is a running program: its own address space (the code, heap, and stack from stage 4), its register values including the program counter, and the resources the OS is tracking for it, like open files. Each has a number, its process ID (PID). Run the same program twice and you get two processes with separate memory.</p>
+  <p>At any moment a process is in one of three main states:</p>
+  <figure class="figure">
+    <svg viewBox="0 0 560 190" role="img" aria-labelledby="st-t" style="max-width:600px">
+      <title id="st-t">Process states. Ready and Running switch back and forth when the scheduler runs or pauses the process. Running goes to Blocked when it waits for something like disk input, and Blocked goes back to Ready when that finishes.</title>
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/></marker></defs>
+      <rect x="30" y="30" width="130" height="50" rx="25" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="95" y="60" class="glabel" text-anchor="middle">Ready</text>
+      <rect x="400" y="30" width="130" height="50" rx="25" fill="var(--hl)" stroke="var(--ink)" stroke-width="2"/><text x="465" y="60" class="glabel" text-anchor="middle" fill="#1b2a41">Running</text>
+      <rect x="215" y="125" width="130" height="50" rx="25" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="280" y="155" class="glabel" text-anchor="middle">Blocked</text>
+      <g fill="none" stroke="var(--ink)" stroke-width="2">
+        <path d="M160,45 H396" marker-end="url(#arr)"/>
+        <path d="M400,68 H164" marker-end="url(#arr)"/>
+        <path d="M440,80 L345,140" marker-end="url(#arr)"/>
+        <path d="M215,145 L125,84" marker-end="url(#arr)"/>
+      </g>
+      <text x="280" y="38" class="gsmall" text-anchor="middle">scheduled</text>
+      <text x="280" y="86" class="gsmall" text-anchor="middle">paused (time's up)</text>
+      <text x="430" y="125" class="gsmall">waits for disk,</text><text x="430" y="140" class="gsmall">network, input</text>
+      <text x="60" y="125" class="gsmall">the wait ends</text>
+    </svg>
+    <figcaption>A process only uses the CPU while running. Waiting on slow devices puts it to sleep, so the CPU can run something else.</figcaption>
+  </figure>
+
+  <div class="mcq" data-id="proc-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">A process calls <code>read()</code> on a file that has to come from disk. What state is it in while it waits?</p>
+    <div class="choices">
+      <button type="button" data-why="It isn't using the CPU; spinning while waiting would waste it.">Running</button>
+      <button type="button" data-why="Ready means it could run right now if given the CPU. It can't; it has nothing to do until the data arrives.">Ready</button>
+      <button type="button">Blocked</button>
+      <button type="button" data-why="It's still alive; it'll continue when the data arrives.">Ended</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Blocked</strong>. A disk read takes thousands to millions of CPU ticks (stage 4), so the OS runs other processes in the meantime and moves this one back to Ready when the data arrives.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="syscalls">System calls</h2>
+  <p>If user-mode programs can't touch hardware, how does a program read a file, print, or open a network connection? It asks the kernel, through a <span class="hl">system call</span>. The program puts a call number and arguments in registers and runs a special instruction (<code>syscall</code> on x86-64). The CPU switches to kernel mode and jumps to the kernel's handler, which checks the request, does the work, and returns to user mode with the result.</p>
+  <p>Linux has a few hundred system calls: <code>open</code>, <code>read</code>, <code>write</code>, <code>close</code>, <code>fork</code>, <code>execve</code>, <code>mmap</code>, and so on. Python's <code>open()</code> and <code>print()</code> end up as these calls, made for you by the C library. The tool <code>strace</code> shows every system call a program makes, and it's one of the best debugging tools on Linux.</p>
+
+  <div class="mcq" data-id="proc-q2" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">Why can't a normal program just read the disk directly, without a system call?</p>
+    <div class="choices">
+      <button type="button">It runs in user mode, where the CPU blocks direct hardware access, so the kernel can enforce who reads what</button>
+      <button type="button" data-why="Programs can be written in assembly; language isn't the barrier.">Programs aren't written in assembly</button>
+      <button type="button" data-why="Speed isn't the reason. System calls are actually slower than direct access would be.">The disk is too fast for programs to keep up with</button>
+      <button type="button" data-why="The disk works the same for everyone; protection is about permission.">Only one program can exist at a time</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Protection.</strong> If any program could talk to the disk, file permissions would mean nothing. The hardware's user and kernel modes, plus the system call doorway, let the kernel check every request.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="fork">fork, exec, and wait</h2>
+  <p>Unix creates processes in two steps, and Linux and macOS still work this way:</p>
+  <ul>
+    <li><code>fork()</code> makes an almost exact copy of the calling process. Both continue from the same line. The only difference is what <code>fork</code> returns: the child's PID in the parent, and <strong>0 in the child</strong>.</li>
+    <li><code>exec()</code> replaces the current process's program with a different one, keeping the same PID.</li>
+    <li><code>wait()</code> makes a parent sleep until a child finishes.</li>
+  </ul>
+<pre><code>import os
+
+pid = os.fork()                  # one process goes in, two come out
+if pid == 0:
+    print("child: my pid is", os.getpid(), flush=True)
+    os._exit(0)
+else:
+    os.waitpid(pid, 0)           # wait for the child to finish
+    print("parent: my child was", pid)</code></pre>
+  <p>(The <code>flush=True</code> matters. Without it, the child's output can sit in a buffer and vanish when <code>os._exit</code> ends the process: an actual bug found while testing this example.) A shell is this loop: read a command, <code>fork</code>, have the child <code>exec</code> the command, and have the parent <code>wait</code> for it. Splitting creation into two steps lets the child set things up in between, such as redirecting its output to a file for <code>ls &gt; out.txt</code>.</p>
+
+  <div class="problem" data-id="proc-p1" data-answer="8|eight">
+    <span class="qtag">Practice 1</span>
+    <p class="q">A program calls <code>fork()</code> three times in a row, with no <code>if</code>s. How many processes exist afterward, including the original?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Each fork doubles every process that reaches it. Step through the panel.</details>
+    <div class="solution" hidden><p>2 × 2 × 2 = <strong>8</strong>. With n forks in a row, 2ⁿ processes. That doubling is also what makes a fork bomb so dangerous (see below).</p></div>
+  </div>
+
+  <div class="mcq" data-id="proc-q3" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">What does <code>fork()</code> return in the child process?</p>
+    <div class="choices">
+      <button type="button" data-why="That's what the parent gets: the new child's PID.">The child's PID</button>
+      <button type="button">0</button>
+      <button type="button" data-why="−1 means fork failed, for example because there are too many processes.">−1</button>
+      <button type="button" data-why="The child can get its parent's PID with getppid(), but fork doesn't return it.">The parent's PID</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>0</strong>. That's how the two copies tell themselves apart: same code, different return value, so <code>if pid == 0</code> sends them down different paths.</p></div>
+  </div>
+
+  <div class="problem" data-id="proc-p2" data-answer="4|four">
+    <span class="qtag">Practice 2</span>
+    <p class="q">How many lines does <code>os.fork(); os.fork(); print("hello")</code> print?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Count the processes that reach the print.</details>
+    <div class="solution" hidden><p><strong>4</strong>: two forks make four processes, and every one runs the print.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="switch">Switching between processes</h2>
+  <p>With hundreds of processes and a few cores, the OS has to take turns. A hardware timer interrupts the CPU every few milliseconds and hands control to the kernel. The kernel saves the running process's registers (including its program counter) into memory, picks another process, loads that one's saved registers, and returns to it. This is a <span class="hl">context switch</span>. It happens so often, hundreds of times a second per core, that every program seems to run continuously. Which process goes next is the scheduler's decision, and that's the next lesson.</p>
+  <p>Processes can also be poked from outside with <em>signals</em>. Pressing Ctrl+C sends SIGINT, which by default ends the program; <code>kill</code> sends others.</p>
+
+  <div class="mcq" data-id="proc-q4" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">You type <code>ls</code> in a terminal. Which sequence does the shell use to run it?</p>
+    <div class="choices">
+      <button type="button" data-why="If the shell exec'ed ls itself, the shell would be replaced, and you'd have no shell after ls finished.">exec ls, then wait</button>
+      <button type="button" data-why="The shell doesn't copy ls's code into itself.">Read ls's code and run it as a function</button>
+      <button type="button" data-why="Without exec, the child would still be running the shell, not ls.">fork, then wait</button>
+      <button type="button">fork; the child execs ls; the parent waits</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>fork, exec, wait.</strong> The shell survives because only its child was replaced by <code>ls</code>. Add <code>&amp;</code> to a command and the shell skips the wait, running it in the background.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>The fork bomb</h3>
+    <p>This line of Bash is famous: <code>:(){ :|:&amp; };:</code>. It defines a function named <code>:</code> that runs two copies of itself, piped together, in the background, then calls it. Each copy does the same, so the number of processes doubles again and again, exactly like the panel, but forever. Within seconds the system's process table fills up, and the machine can't even start the program you'd use to stop it. Nothing about it is a bug in the OS; it just uses <code>fork</code> as designed. The defense is limits: Linux can cap the number of processes per user (<code>ulimit -u</code>) or per group of processes (the <em>pids</em> controller in cgroups), which is one of the protections containers rely on.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>The OS virtualizes the CPU and memory, manages concurrency, and persists data. Its kernel runs in a privileged mode.</li>
+    <li>A process is a running program: address space, registers, and OS resources. It's running, ready, or blocked.</li>
+    <li>Programs reach hardware only through system calls, which switch the CPU into kernel mode.</li>
+    <li><code>fork</code> copies a process (returning 0 in the child), <code>exec</code> replaces its program, <code>wait</code> waits for a child. Shells are built on these.</li>
+    <li>A timer interrupt and context switches let one core take turns among many processes.</li>
+  </ul>
+
+  <h3>Try it yourself</h3>
+  <p>On Linux or macOS (Python's <code>os.fork</code> doesn't exist on Windows; use WSL there), save the fork example above and run it. Then watch its system calls on Linux:</p>
+<pre><code>strace -f -e trace=clone,execve,wait4,write python3 fork_demo.py</code></pre>
+  <p>(<code>clone</code> is the system call Linux actually uses to implement <code>fork</code>.)</p>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 1</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="processes">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Scheduling</strong>: how the OS decides which process runs next.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/" target="_blank" rel="noopener">Operating Systems: Three Easy Pieces (OSTEP)</a><span>The free textbook this stage follows. Chapters 4 to 6 cover processes, the process API, and limited direct execution.</span></li>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-api.pdf" target="_blank" rel="noopener">OSTEP chapter 5: Process API (PDF)</a><span>fork, exec, and wait in C, with the shell example.</span></li>
+      <li><a href="https://pdos.csail.mit.edu/6.1810/" target="_blank" rel="noopener">MIT 6.1810: Operating System Engineering</a><span>Builds on xv6, a small teaching version of Unix. Its first labs write programs with fork, exec, and pipes.</span></li>
+      <li><a href="https://cs162.org/" target="_blank" rel="noopener">Berkeley CS162: Operating Systems and System Programming</a><span>Processes, system calls, and the kernel/user boundary in the first weeks.</span></li>
+      <li><a href="https://github.com/mit-pdos/xv6-riscv" target="_blank" rel="noopener">xv6 source code</a><span>A complete teaching OS small enough to read in a semester. Its fork is a few dozen lines.</span></li>
+      <li><a href="https://man7.org/linux/man-pages/man2/fork.2.html" target="_blank" rel="noopener">Linux manual: fork(2)</a><span>The exact rules for what the child inherits.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Fork_bomb" target="_blank" rel="noopener">Fork bomb (Wikipedia)</a><span>How fork bombs work in several languages, and the defenses.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Fork tree: after each fork, every existing process gets a child. PIDs are assigned in creation order.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const CODE = ['import os', 'os.fork()', 'os.fork()', 'os.fork()', 'print("hello from", os.getpid())'];
+    // Columns: column k lists the processes alive after k forks, each with its parent.
+    const cols = [[{ pid: 100, parent: null }]];
+    let next = 101;
+    for (let k = 1; k <= 3; k++) {
+      const col = [];
+      cols[k - 1].forEach(p => { col.push({ pid: p.pid, parent: p.pid, same: true }); col.push({ pid: next++, parent: p.pid }); });
+      cols.push(col);
+    }
+    let step = 0;   // 0: start, 1..3: after fork k, 4: printed
+    $('fk-code').innerHTML = CODE.map(l => `<li><code>${l.replace(/</g, '&lt;')}</code></li>`).join('');
+
+    function render() {
+      const k = Math.min(step, 3);
+      [...$('fk-code').children].forEach((li, i) => li.classList.toggle('now', i === (step === 0 ? 0 : step === 4 ? 4 : step)));
+      const colW = 120, rowH = 26, top = 26;
+      const shown = cols.slice(0, k + 1), height = top + 8 * rowH + 10, width = shown.length * colW + 20;
+      const y = (c, i) => top + (i + 0.5) * (8 * rowH / cols[c].length);
+      let html = '';
+      shown.forEach((col, c) => {
+        html += `<text class="col" x="${20 + c * colW + 40}" y="14">${c === 0 ? 'start' : 'after fork ' + c}</text>`;
+        col.forEach((p, i) => {
+          if (c > 0) { const pi = Math.floor(i / 2); html += `<line x1="${20 + (c - 1) * colW + 80}" y1="${y(c - 1, pi)}" x2="${20 + c * colW}" y2="${y(c, i)}"/>`; }
+          const isNew = c === k && c > 0 && !p.same;
+          html += `<g class="${isNew ? 'new' : ''}"><rect x="${20 + c * colW}" y="${y(c, i) - 10}" width="80" height="20" rx="4"/><text x="${20 + c * colW + 40}" y="${y(c, i)}">PID ${p.pid}</text></g>`;
+        });
+      });
+      const svg = $('fk');
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`); svg.setAttribute('width', width); svg.setAttribute('height', height);
+      svg.innerHTML = html;
+      const n = cols[k].length;
+      $('fk-msg').textContent = step === 0 ? 'One process, PID 100, starts running the program.'
+        : step <= 3 ? `fork number ${step}: each of the ${n / 2} process${n / 2 > 1 ? 'es' : ''} makes a copy of itself (highlighted). Now there are ${n}. Every copy continues from the next line.`
+        : 'All 8 processes reach the print. Each prints its own PID; the order depends on the scheduler, so it changes from run to run.';
+      $('fk-out').textContent = step === 4 ? cols[3].map(p => p.pid).sort(() => Math.random() - 0.5).map(p => `hello from ${p}`).join('\n') : '';
+      $('fk-out').style.whiteSpace = 'pre-line';
+      $('fk-back').disabled = step === 0;
+      $('fk-next').disabled = step === 4;
+    }
+    $('fk-back').onclick = () => { step = Math.max(0, step - 1); render(); };
+    $('fk-next').onclick = () => { step = Math.min(4, step + 1); render(); };
+    render();
+  })();
+</script>
+</body>
+</html>
