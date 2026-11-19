@@ -60,7 +60,7 @@ window.CURRICULUM = [
     sources: ['MIT 6.1810', 'Berkeley CS162', 'OSTEP'],
     lessons: [
       { id: 'processes', title: 'Processes and system calls', href: 'lessons/25-processes.html', minutes: 40 },
-      { id: 'scheduling', title: 'Scheduling' },
+      { id: 'scheduling', title: 'Scheduling', href: 'lessons/26-scheduling.html', minutes: 40 },
       { id: 'virtual-memory', title: 'Virtual memory' },
       { id: 'threads', title: 'Threads and race conditions' },
       { id: 'sync', title: 'Locks, deadlock, and synchronization' },

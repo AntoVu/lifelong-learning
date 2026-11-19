@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scheduling | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .sc-top { display: grid; gap: .5rem; margin-bottom: .8rem; }
+  .sc-top > div { display: flex; flex-wrap: wrap; gap: .4rem .8rem; align-items: center; }
+  .sc-top .lbl { font: 600 .85rem var(--sans); color: var(--ink-2); min-width: 5rem; }
+  .gantt-wrap { overflow-x: auto; }
+  .gantt { display: grid; gap: 2px; min-width: 480px; }
+  .grow { display: grid; grid-template-columns: 2.2rem 1fr; align-items: center; gap: .4rem; }
+  .grow b { font: 700 .9rem var(--mono); text-align: right; }
+  .ticks { display: grid; gap: 2px; }
+  .tk { height: 1.6rem; border-radius: 2px; background: var(--paper); border: 1px solid var(--rule); }
+  .tk.wait { background: repeating-linear-gradient(45deg, transparent 0 4px, var(--rule) 4px 6px); }
+  .tk.run.A { background: #1b2a41; } .tk.run.B { background: #f6e15a; border-color: #1b2a41; } .tk.run.C { background: #e08a6d; }
+  @media (prefers-color-scheme: dark) { .tk.run.A { background: #a8b6c3; } }
+  .axis { font: .7rem var(--mono); color: var(--pencil); }
+  .sc-table { margin-top: .8rem; font-size: .88rem; }
+  .sc-table td, .sc-table th { padding: .25rem .6rem; text-align: center; }
+  .sc-table tfoot td { font-weight: 700; border-top: 2px solid var(--ink); }
+  .legend { font: .8rem var(--sans); color: var(--ink-2); margin: .4rem 0 0; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 5: Operating systems and concurrency, lesson 2 of 6</div>
+    <h1>Scheduling</h1>
+    <p class="lede">Many processes are ready to run, and a core can run one at a time. Which goes next, and for how long? The answer decides whether your laptop feels snappy or sluggish, and there's no single best policy, only tradeoffs. This lesson lets you try the classic ones.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="sc-title">
+    <h2 id="sc-title" style="margin-top:0;font-size:1.25rem">Schedule three jobs</h2>
+    <div class="try">Pick a workload and a policy. Each square is one time unit; a solid square means the job is running, striped means it has arrived and is waiting. Compare the averages at the bottom.</div>
+    <div class="sc-top">
+      <div><span class="lbl">Workload</span><div class="seg" id="sc-work" role="group" aria-label="Workload"></div></div>
+      <div><span class="lbl">Policy</span><div class="seg" id="sc-pol" role="group" aria-label="Policy"></div></div>
+    </div>
+    <div class="gantt-wrap"><div class="gantt" id="sc-gantt"></div></div>
+    <p class="legend" id="sc-note"></p>
+    <div class="table-scroll"><table class="sc-table" id="sc-table"></table></div>
+  </section>
+  <p>On the convoy workload, FIFO makes the two short jobs wait behind the long one, and the average turnaround is 12. Shortest job first cuts it to about 6.7. Round robin does worse on turnaround but gets every job started almost immediately. That tension, finishing fast versus responding fast, runs through all of scheduling.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Measure a schedule by turnaround time and response time.</li>
+      <li>Run FIFO, shortest job first, and shortest time-to-completion first by hand.</li>
+      <li>Explain round robin and the cost of time slices.</li>
+      <li>Explain how a multi-level feedback queue learns which jobs are interactive.</li>
+      <li>Explain priority inversion and how it's fixed.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#metrics">Measuring a schedule</a></li>
+      <li><a href="#fifo">First in, first out</a></li>
+      <li><a href="#sjf">Shortest job first</a></li>
+      <li><a href="#rr">Round robin</a></li>
+      <li><a href="#mlfq">Real schedulers</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="metrics">Measuring a schedule</h2>
+  <p>Two numbers capture what users feel:</p>
+  <ul>
+    <li><strong>Turnaround time</strong> = finish time − arrival time. How long until the job is done. It matters for batch work, like compiling or rendering a video.</li>
+    <li><strong>Response time</strong> = first time it runs − arrival time. How long until something happens. It matters for anything interactive: you want your keystroke handled now, not after the video renders.</li>
+  </ul>
+  <p>The table in the panel computes both for each job and averages them.</p>
+
+  <!-- 2 -->
+  <h2 id="fifo">First in, first out</h2>
+  <p>The simplest policy runs jobs in arrival order, each to completion. FIFO (first come, first served) is easy and fair in a sense, but it suffers from the <span class="hl">convoy effect</span>: short jobs stuck behind a long one wait for all of it, like shoppers with one item behind a full cart.</p>
+
+  <div class="problem" data-id="sched-p1" data-answer="12|twelve">
+    <span class="qtag">Practice 1</span>
+    <p class="q">Jobs A (10 units), B (2), and C (2) all arrive at time 0 and run FIFO in the order A, B, C. What's the average turnaround time?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="decimal" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>A finishes at 10, B at 12, C at 14. All arrived at 0.</details>
+    <div class="solution" hidden><p>(10 + 12 + 14) / 3 = <strong>12</strong>. Check it in the panel with the convoy workload and FIFO.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="sjf">Shortest job first</h2>
+  <p>If the goal is low average turnaround, run the shortest job first (SJF). It's provably optimal for that goal when all jobs arrive together. But a long job that's already running still blocks short ones that arrive later. The fix is to allow <em>preemption</em>: whenever a job arrives, switch to whichever job has the least time left. That's shortest time-to-completion first (STCF). Try the staggered workload to see the difference.</p>
+  <p>Both share a big practical problem: the OS doesn't know how long a job will take. It's a useful ideal, and real schedulers approximate it by guessing from past behavior.</p>
+
+  <div class="problem" data-id="sched-p2" data-answer="6.67|6.7|20/3|6.66|6.666">
+    <span class="qtag">Practice 2</span>
+    <p class="q">Same three jobs (A 10, B 2, C 2, all at time 0), now run shortest job first. What's the average turnaround? (Two decimal places.)</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="decimal" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Order B, C, A: they finish at 2, 4, and 14.</details>
+    <div class="solution" hidden><p>(2 + 4 + 14) / 3 = 20 / 3 ≈ <strong>6.67</strong>, almost half of FIFO's 12, with exactly the same work done.</p></div>
+  </div>
+
+  <div class="mcq" data-id="sched-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">Why don't real operating systems simply use shortest job first?</p>
+    <div class="choices">
+      <button type="button" data-why="Sorting a few hundred jobs is trivial work.">Sorting jobs by length is too slow</button>
+      <button type="button" data-why="SJF is optimal for average turnaround, as Practice 2 shows.">It gives bad average turnaround</button>
+      <button type="button">The OS can't know in advance how long each job will run</button>
+      <button type="button" data-why="Preemption is what STCF adds; it's standard in every modern OS.">CPUs can't pause a job once it starts</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>Job lengths are <strong>unknown</strong>. A program doesn't announce how long it will compute or when the user will click. Real schedulers watch how each process behaves and adjust.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="rr">Round robin</h2>
+  <p>To respond quickly to everyone, <span class="hl">round robin</span> gives each ready job a short time slice (a <em>quantum</em>), then moves it to the back of the queue. Every job starts almost at once, so response time is excellent. Turnaround suffers, because every job is stretched out by sharing.</p>
+  <p>Choosing the slice is a tradeoff. Each switch costs a context switch, plus cold caches for the job that just started (stage 4). Slices too short waste time switching; slices too long feel like FIFO. Typical values are a few milliseconds.</p>
+
+  <div class="problem" data-id="sched-p3" data-answer="1|one">
+    <span class="qtag">Practice 3</span>
+    <p class="q">Round robin with a quantum of 1, on A (10), B (2), and C (2), all arriving at 0 and queued in that order. What's the average response time?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="decimal" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>A first runs at 0, B at 1, C at 2.</details>
+    <div class="solution" hidden><p>(0 + 1 + 2) / 3 = <strong>1</strong>, versus about 7.3 for FIFO. But average turnaround rises to about 8.3, because A's work is spread over 14 time units.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="mlfq">Real schedulers</h2>
+  <p>Real systems want both: snappy interactive programs and good throughput for long jobs, without knowing which is which. The classic answer is the <span class="hl">multi-level feedback queue</span> (MLFQ), first described by Fernando Corbató in 1962 for an early time-sharing system. It keeps several queues at different priorities and learns from behavior:</p>
+  <ul>
+    <li>New jobs start at the top priority.</li>
+    <li>A job that uses its whole time slice is probably a long computation, so it moves down a level.</li>
+    <li>A job that gives up the CPU early, like an editor waiting for keystrokes, stays high. Interactive work keeps getting fast response.</li>
+    <li>Every so often, everything is boosted back to the top, so long jobs aren't starved forever.</li>
+  </ul>
+  <p>Windows and macOS use priority schedulers in this family. Linux took a different route: since 2007 its schedulers (CFS, then EEVDF in 2023) aim for fairness, tracking how much CPU time each task has had and running the one that's had the least. That's the red-black tree from stage 3. With multiple cores, schedulers also try to keep each process on the same core, so its data stays in that core's cache.</p>
+
+  <div class="mcq" data-id="sched-q2" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">Under MLFQ, a text editor spends most of its time waiting for keystrokes and runs briefly after each one. Where does it end up?</p>
+    <div class="choices">
+      <button type="button" data-why="It moves down only if it uses up full time slices, which an editor rarely does.">At the lowest priority, because it's been running a long time</button>
+      <button type="button">At a high priority, because it keeps giving up the CPU before its slice ends</button>
+      <button type="button" data-why="MLFQ doesn't look at program names or types; it watches behavior.">Wherever the user configured it</button>
+      <button type="button" data-why="Waiting doesn't remove it from scheduling; it returns to Ready when a key arrives.">Removed from the queues while it waits</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>High priority.</strong> Short bursts look interactive, so MLFQ keeps the editor responsive without ever being told it's an editor.</p></div>
+  </div>
+
+  <div class="mcq" data-id="sched-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">In the Pathfinder story below, what fixed the repeated resets?</p>
+    <div class="choices">
+      <button type="button" data-why="The task was needed for the mission's science.">Deleting the weather task</button>
+      <button type="button" data-why="The problem was the order tasks ran in, not raw speed.">A faster CPU</button>
+      <button type="button" data-why="Rebooting was the symptom, not the fix.">Rebooting more often</button>
+      <button type="button">Turning on priority inheritance, so a low-priority task holding a needed lock temporarily runs at high priority</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Priority inheritance.</strong> While the low-priority task held the lock the high-priority task needed, it borrowed the high priority, so medium-priority work couldn't push it aside.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>Mars Pathfinder, 1997</h3>
+    <p>Days after landing on Mars on July 4, 1997, the Pathfinder lander started resetting itself, losing data each time. Engineers at JPL reproduced it on an identical copy on Earth. A low-priority task that gathered weather data held a lock on a shared data bus. A high-priority task needed that lock and had to wait, which is normal. But medium-priority tasks, which didn't need the lock, kept preempting the low-priority one, so it never got to finish and release the lock. The high-priority task waited too long, a watchdog timer decided the system had hung, and it reset the computer. This is <span class="hl">priority inversion</span>. The operating system, VxWorks, already supported priority inheritance; it was just turned off. JPL uploaded a change to turn it on, and the resets stopped.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Turnaround = finish − arrival; response = first run − arrival. Policies trade one against the other.</li>
+    <li>FIFO is simple but suffers the convoy effect. SJF and STCF minimize turnaround, but need job lengths no one knows.</li>
+    <li>Round robin gives great response at the cost of turnaround and context switches.</li>
+    <li>MLFQ learns from behavior: short bursts stay high priority. Linux instead runs whatever has had the least CPU.</li>
+    <li>Locks and priorities interact: priority inheritance prevents priority inversion.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>A tiny round-robin simulator:</p>
+<pre><code>from collections import deque
+
+def round_robin(jobs, quantum=1):          # jobs: {name: length}, all arrive at 0
+    queue, t, finish = deque(jobs.items()), 0, {}
+    while queue:
+        name, left = queue.popleft()
+        run = min(quantum, left)
+        t += run
+        if left - run:
+            queue.append((name, left - run))
+        else:
+            finish[name] = t
+    return finish
+
+print(round_robin({"A": 10, "B": 2, "C": 2}))   # {'B': 5, 'C': 6, 'A': 14}</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 2</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="scheduling">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Virtual memory</strong>: how every process gets its own private address space.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf" target="_blank" rel="noopener">OSTEP chapter 7: Scheduling introduction (PDF)</a><span>FIFO, SJF, STCF, and round robin, with the same metrics as this lesson.</span></li>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf" target="_blank" rel="noopener">OSTEP chapter 8: The multi-level feedback queue (PDF)</a><span>MLFQ's rules, how it can be gamed, and the fixes.</span></li>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-lottery.pdf" target="_blank" rel="noopener">OSTEP chapter 9: Proportional share (PDF)</a><span>Lottery scheduling and Linux's CFS.</span></li>
+      <li><a href="https://cs162.org/" target="_blank" rel="noopener">Berkeley CS162</a><span>Its scheduling lectures, including real-time scheduling.</span></li>
+      <li><a href="https://www.cs.cornell.edu/courses/cs614/1999sp/papers/pathfinder.html" target="_blank" rel="noopener">What really happened on Mars?</a><span>Mike Jones's widely shared 1997 summary of how the resets were diagnosed and fixed.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Priority_inversion" target="_blank" rel="noopener">Priority inversion (Wikipedia)</a><span>The problem and its standard fixes.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Scheduling simulator: one tick per time unit. Records which job runs each tick, then computes metrics.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const WORK = {
+      'Convoy (all at 0)': [['A', 0, 10], ['B', 0, 2], ['C', 0, 2]],
+      'Staggered arrivals': [['A', 0, 8], ['B', 2, 3], ['C', 4, 1]],
+    };
+    const POLS = ['FIFO', 'SJF', 'STCF', 'Round robin'];
+    let work = Object.keys(WORK)[0], pol = 'FIFO';
+
+    function simulate() {
+      const jobs = WORK[work].map(([n, a, l]) => ({ n, a, l, left: l, first: null, done: null }));
+      const timeline = [], queue = [];
+      let t = 0, cur = null;
+      while (jobs.some(j => j.done === null) && t < 100) {
+        jobs.filter(j => j.a === t).forEach(j => queue.push(j));             // arrivals join the queue
+        const ready = queue.filter(j => j.left > 0);
+        let pick = null;
+        if (pol === 'FIFO') pick = cur && cur.left ? cur : ready.slice().sort((x, y) => x.a - y.a || x.n.localeCompare(y.n))[0];
+        else if (pol === 'SJF') pick = cur && cur.left ? cur : ready.slice().sort((x, y) => x.l - y.l || x.a - y.a || x.n.localeCompare(y.n))[0];
+        else if (pol === 'STCF') pick = ready.slice().sort((x, y) => x.left - y.left || x.a - y.a || x.n.localeCompare(y.n))[0];
+        else pick = ready[0];                                                 // round robin: front of the queue
+        if (pick) {
+          if (pick.first === null) pick.first = t;
+          pick.left--;
+          if (!pick.left) pick.done = t + 1;
+          if (pol === 'Round robin') { queue.splice(queue.indexOf(pick), 1); if (pick.left) queue.push(pick); }
+        }
+        timeline.push(pick ? pick.n : null);
+        cur = pick; t++;
+      }
+      return { jobs, timeline };
+    }
+
+    function render() {
+      const { jobs, timeline } = simulate(), T = timeline.length;
+      $('sc-gantt').innerHTML = jobs.map(j => `<div class="grow"><b>${j.n}</b><div class="ticks" style="grid-template-columns:repeat(${T},1fr)">${timeline.map((r, t) =>
+        `<span class="tk${r === j.n ? ' run ' + j.n : t >= j.a && t < j.done ? ' wait' : ''}" title="t=${t}"></span>`).join('')}</div></div>`).join('') +
+        `<div class="grow"><span></span><div class="ticks axis" style="grid-template-columns:repeat(${T},1fr)">${timeline.map((_, t) => `<span>${t % 2 === 0 ? t : ''}</span>`).join('')}</div></div>`;
+      const avg = f => (jobs.reduce((s, j) => s + f(j), 0) / jobs.length).toFixed(2).replace(/\.00$/, '');
+      $('sc-table').innerHTML = `<thead><tr><th>Job</th><th>Arrives</th><th>Length</th><th>First runs</th><th>Finishes</th><th>Turnaround</th><th>Response</th></tr></thead><tbody>` +
+        jobs.map(j => `<tr><td>${j.n}</td><td>${j.a}</td><td>${j.l}</td><td>${j.first}</td><td>${j.done}</td><td>${j.done - j.a}</td><td>${j.first - j.a}</td></tr>`).join('') +
+        `</tbody><tfoot><tr><td colspan="5">Average</td><td>${avg(j => j.done - j.a)}</td><td>${avg(j => j.first - j.a)}</td></tr></tfoot>`;
+      $('sc-note').textContent = { FIFO: 'FIFO: run jobs in arrival order, each to completion.', SJF: 'SJF: when the CPU is free, start the shortest job that has arrived. No interrupting.', STCF: 'STCF: at every tick, run the job with the least time left, interrupting if needed.', 'Round robin': 'Round robin: each job runs 1 time unit, then goes to the back of the queue.' }[pol];
+    }
+    const seg = (host, opts, get, set) => opts.forEach(o => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = o; b.setAttribute('aria-pressed', o === get());
+      b.onclick = () => { set(o); [...host.children].forEach(c => c.setAttribute('aria-pressed', c === b)); render(); };
+      host.append(b);
+    });
+    seg($('sc-work'), Object.keys(WORK), () => work, v => work = v);
+    seg($('sc-pol'), POLS, () => pol, v => pol = v);
+    render();
+  })();
+</script>
+</body>
+</html>
