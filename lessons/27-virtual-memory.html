@@ -54,7 +54,7 @@
     <form class="vm-top" id="vm-form">
       <div class="seg" id="vm-proc" role="group" aria-label="Process"></div>
       <label for="vm-addr" style="font:.9rem var(--sans)">Virtual address 0x</label>
-      <input id="vm-addr" value="2A" maxlength="2" spellcheck="false" autocomplete="off">
+      <input id="vm-addr" value="2A" maxlength="4" spellcheck="false" autocomplete="off">
       <button class="btn" type="submit">Translate</button>
     </form>
     <div class="vm-split" id="vm-split"></div>
@@ -298,8 +298,9 @@ with open("data.bin", "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_RE
     });
     $('vm-form').onsubmit = e => {
       e.preventDefault();
-      const v = parseInt($('vm-addr').value, 16);
-      if (!/^[0-9a-f]{1,2}$/i.test($('vm-addr').value.trim()) || isNaN(v)) { $('vm-msg').className = 'vm-msg'; $('vm-msg').textContent = 'Type one or two hex digits, like 2A or E4.'; return; }
+      const raw = $('vm-addr').value.trim().replace(/^0x/i, '');   // accept 2A or 0x2A
+      const v = parseInt(raw, 16);
+      if (!/^[0-9a-f]{1,2}$/i.test(raw) || isNaN(v)) { $('vm-msg').className = 'vm-msg'; $('vm-msg').textContent = 'Type one or two hex digits, like 2A or E4.'; return; }
       translate(v);
     };
     translate(0x2A);
