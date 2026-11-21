@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual memory | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .vm-top { display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: center; margin-bottom: .8rem; }
+  .vm-top input { width: 6rem; font: 1rem var(--mono); padding: .45rem .6rem; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); }
+  .vm-split { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; font: 1rem var(--mono); margin: .3rem 0 .8rem; }
+  .vm-split span { padding: .25rem .6rem; border: 1.5px solid var(--ink); border-radius: 5px; }
+  .vm-split .pg { background: var(--hl); color: var(--hl-ink); }
+  .vm-split .off { background: var(--panel); }
+  .vm-split .eq { border: 0; color: var(--ink-2); }
+  .vm-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+  @media (max-width: 700px) { .vm-grid { grid-template-columns: 1fr; } }
+  .vm-grid h4 { font: 600 .82rem var(--sans); color: var(--ink-2); margin: 0 0 .3rem; }
+  table.pt { margin: 0; font: .82rem var(--mono); width: 100%; }
+  table.pt td, table.pt th { padding: .15rem .4rem; text-align: center; }
+  table.pt tr.hot td { background: var(--hl); color: var(--hl-ink); }
+  table.pt tr.invalid td { color: var(--pencil); }
+  .frames { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; }
+  .frame { font: .78rem var(--mono); border: 1.5px solid var(--rule); border-radius: 4px; padding: .2rem .35rem; }
+  .frame.A { border-color: var(--ink); }
+  .frame.B { border-color: #e08a6d; border-style: dashed; }
+  .frame.hot { background: var(--hl); color: var(--hl-ink); }
+  .tlb div { font: .82rem var(--mono); border: 1.5px solid var(--ink); border-radius: 4px; padding: .2rem .4rem; margin-bottom: 3px; }
+  .tlb .empty { border-style: dashed; border-color: var(--pencil); color: var(--pencil); }
+  .tlb .hot { background: var(--hl); color: var(--hl-ink); }
+  .vm-msg { font: .95rem var(--sans); margin: .8rem 0 0; min-height: 2.8em; }
+  .vm-msg.fault { color: #a33a1f; }
+  @media (prefers-color-scheme: dark) { .vm-msg.fault { color: #f2a48e; } }
+  .vm-stats { font: .85rem var(--sans); color: var(--ink-2); margin: .3rem 0 0; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 5: Operating systems and concurrency, lesson 3 of 6</div>
+    <h1>Virtual memory</h1>
+    <p class="lede">In stage 4, every process had the same memory layout: code near the bottom, stack near the top. If two processes run at once, how can both have their stack at the same address? Because neither sees real addresses. Every address a program uses is translated, on every single memory access, by hardware the OS controls. This lesson shows how.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="vm-title">
+    <h2 id="vm-title" style="margin-top:0;font-size:1.25rem">Translate an address</h2>
+    <div class="try">A tiny machine: 8-bit addresses and 16-byte pages. Type a virtual address in hex and translate it for process A or B. Watch the page table, physical memory, and the TLB.</div>
+    <form class="vm-top" id="vm-form">
+      <div class="seg" id="vm-proc" role="group" aria-label="Process"></div>
+      <label for="vm-addr" style="font:.9rem var(--sans)">Virtual address 0x</label>
+      <input id="vm-addr" value="2A" maxlength="2" spellcheck="false" autocomplete="off">
+      <button class="btn" type="submit">Translate</button>
+    </form>
+    <div class="vm-split" id="vm-split"></div>
+    <div class="vm-grid">
+      <div><h4 id="vm-pt-h">Page table</h4><table class="pt" id="vm-pt"></table></div>
+      <div><h4>Physical memory (frames)</h4><div class="frames" id="vm-frames"></div></div>
+      <div><h4>TLB (4 recent translations)</h4><div class="tlb" id="vm-tlb"></div></div>
+    </div>
+    <p class="vm-msg" id="vm-msg" aria-live="polite"></p>
+    <p class="vm-stats" id="vm-stats"></p>
+  </section>
+  <p>Translate 0x2A for process A, then for process B. Same virtual address, different physical memory. Each process has its own page table, so each lives in its own private address space and has no way to even name the other's memory.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain why the OS gives each process virtual addresses.</li>
+      <li>Split an address into a page number and offset, and translate it with a page table.</li>
+      <li>Explain page faults, and the difference between a valid fault and a segmentation fault.</li>
+      <li>Explain what the TLB caches and why it matters.</li>
+      <li>Describe what virtual memory makes possible: isolation, sharing, copy-on-write, and swapping.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#why">Why virtual addresses</a></li>
+      <li><a href="#paging">Pages and page tables</a></li>
+      <li><a href="#faults">Page faults</a></li>
+      <li><a href="#tlb">The TLB</a></li>
+      <li><a href="#tricks">What it makes possible</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="why">Why virtual addresses</h2>
+  <p>Without help, processes sharing one physical memory would get in each other's way: a bug in one could overwrite another, any program could read your browser's passwords, and every program would have to be written to fit wherever there happened to be free memory. <span class="hl">Virtual memory</span> fixes all three. Each process gets its own <em>virtual address space</em>, the same clean layout every time, and the hardware translates each virtual address to a <em>physical</em> address the OS has chosen. A process can only reach the physical memory the OS has mapped for it.</p>
+
+  <!-- 2 -->
+  <h2 id="paging">Pages and page tables</h2>
+  <p>Translating byte by byte would need an enormous table, so memory is divided into fixed-size blocks: <span class="hl">pages</span> in virtual memory and <em>frames</em> in physical memory, usually 4 KB each. An address then splits into two parts: the high bits are the <strong>page number</strong>, and the low bits are the <strong>offset</strong> within the page. Translation only changes the page number:</p>
+<pre><code>virtual address  = [ page number | offset ]
+                        ↓ look up in this process's page table
+physical address = [ frame number | offset ]      (offset unchanged)</code></pre>
+  <p>Each process has a <span class="hl">page table</span> mapping its page numbers to frame numbers, with a valid bit and permission bits (readable, writable, executable) per entry. A piece of hardware in the CPU, the <em>memory management unit</em> (MMU), does the lookup on every access. On a context switch, the OS just points the MMU at the next process's page table.</p>
+
+  <div class="problem" data-id="vm-p1" data-answer="12|twelve">
+    <span class="qtag">Practice 1</span>
+    <p class="q">With 4 KB (4,096-byte) pages, how many bits of an address are the offset?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>The offset must be able to name every byte in a page: 4,096 = 2 to the what?</details>
+    <div class="solution" hidden><p>4,096 = 2¹², so <strong>12</strong> bits, which is exactly 3 hex digits. That's why page-aligned addresses end in <code>000</code> in hex. In the panel's tiny machine, pages are 16 bytes, so the offset is 4 bits: one hex digit.</p></div>
+  </div>
+
+  <div class="problem" data-id="vm-p2" data-answer="0x7a|7a|0x7A">
+    <span class="qtag">Practice 2</span>
+    <p class="q">In the panel's machine (16-byte pages), process A's page 2 maps to frame 7. What physical address does virtual address 0x2A translate to? (Answer in hex.)</p>
+    <form class="answer-row"><input aria-label="Your answer" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>0x2A is page 2, offset A. Swap the page number for the frame number; keep the offset.</details>
+    <div class="solution" hidden><p>Page 2 → frame 7, offset A stays: <strong>0x7A</strong>. Try it in the panel.</p></div>
+  </div>
+
+  <div class="problem" data-id="vm-p3" data-answer="1048576|1,048,576|2^20|2**20">
+    <span class="qtag">Practice 3</span>
+    <p class="q">A 32-bit address space with 4 KB pages has how many pages?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>32 address bits minus 12 offset bits leaves the page number.</details>
+    <div class="solution" hidden><p>2²⁰ = <strong>1,048,576</strong> pages. A flat table with one entry per page would be 4 MB per process, mostly unused. So real systems use <em>multi-level</em> page tables, a tree that only stores the parts in use. x86-64 uses four levels (newer chips can use five).</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="faults">Page faults</h2>
+  <p>If the MMU finds an entry marked invalid, it raises a <span class="hl">page fault</span>, which hands control to the OS. That's not necessarily an error. The OS might have set it up that way on purpose:</p>
+  <ul>
+    <li><strong>Lazy allocation:</strong> when a program asks for a gigabyte, the OS reserves the addresses but only provides a frame when each page is first touched.</li>
+    <li><strong>Swapping:</strong> when RAM is full, the OS can write a rarely used page to disk and mark it invalid. Touching it later faults, and the OS reads it back in. If processes keep needing more pages than fit, the system spends all its time moving pages back and forth: <em>thrashing</em>.</li>
+  </ul>
+  <p>If the address isn't one the process is allowed to use at all, the OS ends the process with a <strong>segmentation fault</strong>. That's what dereferencing a NULL pointer (stage 4) actually triggers: page 0 is deliberately left unmapped so that bug crashes immediately.</p>
+
+  <div class="mcq" data-id="vm-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">A process touches a page that the OS swapped out to disk. What happens?</p>
+    <div class="choices">
+      <button type="button" data-why="That happens for addresses the process isn't allowed to use, not for valid pages that are temporarily on disk.">The process crashes with a segmentation fault</button>
+      <button type="button">A page fault: the OS reads the page back into a frame, fixes the page table, and restarts the instruction</button>
+      <button type="button" data-why="The CPU can't read directly from disk as if it were memory.">The CPU reads the value straight from disk</button>
+      <button type="button" data-why="The data is still on disk; nothing was lost.">The process gets zeros</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p>A <strong>page fault the OS handles</strong>. The program never notices, except that the access took milliseconds instead of nanoseconds.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="tlb">The TLB</h2>
+  <p>If every memory access first needed a page table lookup in memory (four of them, with four levels), programs would run several times slower. So the MMU caches recent translations in a small, fast table called the <span class="hl">translation lookaside buffer</span> (TLB), usually holding somewhere from dozens to a few thousand entries. Thanks to locality, the same few pages get used over and over, so almost every lookup hits. In the panel, translate several addresses on the same page and watch them hit.</p>
+  <p>On a context switch, the old process's translations become wrong, so the TLB must be flushed or its entries tagged by process. That's part of why switching processes costs more than switching threads (next lesson).</p>
+
+  <div class="mcq" data-id="vm-q2" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">What does the TLB store?</p>
+    <div class="choices">
+      <button type="button" data-why="That's the data cache from stage 4.">Recently used data from memory</button>
+      <button type="button" data-why="Page tables live in memory; the TLB is a small cache in front of them.">Every process's full page table</button>
+      <button type="button" data-why="That's swap space, on disk.">Pages that were swapped out</button>
+      <button type="button">Recent page-number-to-frame-number translations</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Translations.</strong> It's a cache for the page table, the same caching idea from stage 4 applied to address translation.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="tricks">What it makes possible</h2>
+  <ul>
+    <li><strong>Isolation:</strong> a process can't touch memory it has no mapping for.</li>
+    <li><strong>Sharing:</strong> map the same frame into many processes. Shared libraries (stage 4) are loaded into memory once and mapped read-only into every program that uses them.</li>
+    <li><strong>Copy-on-write:</strong> <code>fork</code> (lesson 1) doesn't really copy the parent's memory. It maps the same frames into both processes, marked read-only. Only when one of them writes to a page does the fault handler make a private copy of that page. Since most children call <code>exec</code> right away, most pages are never copied.</li>
+    <li><strong>Memory-mapped files:</strong> map a file into memory, and reading a byte of it is just a memory access; page faults load the file on demand.</li>
+  </ul>
+
+  <div class="mcq" data-id="vm-q3" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">Why is <code>fork</code> fast even for a process using gigabytes of memory?</p>
+    <div class="choices">
+      <button type="button">Copy-on-write: the child shares the parent's frames, and pages are only copied when one side writes to them</button>
+      <button type="button" data-why="Memory bandwidth is high, but copying gigabytes still takes a noticeable time.">Copying memory is nearly free on modern hardware</button>
+      <button type="button" data-why="The child does get its own memory, just lazily.">The child shares all memory with the parent forever</button>
+      <button type="button" data-why="fork returns quickly, but the copying isn't simply moved to the background.">The copying happens in a background thread</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Copy-on-write.</strong> fork only copies the page tables, and the read-only trick defers the real copying to the moment it's needed, often never.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>Rowhammer, 2015</h3>
+    <p>Virtual memory's protection rests on one assumption: only the OS can change a page table. In 2014, researchers showed that on many DRAM chips, reading the same row of memory over and over, very fast, could flip bits in the rows next to it, because the cells are packed so tightly that electrical charge leaks between them. In March 2015, Google's Project Zero turned this "rowhammer" effect into an attack. An ordinary program filled memory with page tables, hammered nearby rows until a bit flipped in one of its own page table entries, and gained write access to its own page table, and through that, to all of physical memory. A software protection broken by physics. Memory makers have added defenses since, and the research has continued in both directions.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Each process uses virtual addresses; the MMU translates them to physical ones using that process's page table.</li>
+    <li>Address = page number + offset. Translation swaps the page number for a frame number; the offset stays.</li>
+    <li>Page faults let the OS allocate lazily and swap to disk. Touching an address you have no right to is a segmentation fault.</li>
+    <li>The TLB caches translations, so most accesses skip the page table walk.</li>
+    <li>Virtual memory enables isolation, shared libraries, copy-on-write fork, and memory-mapped files.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>Map a file into memory and read it like a byte array:</p>
+<pre><code>import mmap
+
+with open("data.bin", "wb") as f:
+    f.write(b"hello, virtual memory")
+
+with open("data.bin", "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as m:
+    print(m[:5])           # b'hello' : the page was loaded on first touch
+    print(mmap.PAGESIZE)   # 4096 on most systems</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 3</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="virtual-memory">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Threads and race conditions</strong>: what happens when two flows of control share the same memory.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/vm-paging.pdf" target="_blank" rel="noopener">OSTEP chapter 18: Paging (PDF)</a><span>Pages, page tables, and translation, worked through with small examples like the panel's.</span></li>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/vm-tlbs.pdf" target="_blank" rel="noopener">OSTEP chapter 19: TLBs (PDF)</a><span>How the TLB works, and what happens on a context switch.</span></li>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/vm-smalltables.pdf" target="_blank" rel="noopener">OSTEP chapter 20: Smaller tables (PDF)</a><span>Multi-level page tables.</span></li>
+      <li><a href="https://pdos.csail.mit.edu/6.1810/" target="_blank" rel="noopener">MIT 6.1810: Operating System Engineering</a><span>Its page table lab has you modify a real kernel's page tables.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Copy-on-write" target="_blank" rel="noopener">Copy-on-write (Wikipedia)</a><span>The technique in fork, file systems, and data structures.</span></li>
+      <li><a href="https://googleprojectzero.blogspot.com/2015/03/exploiting-dram-rowhammer-bug-to-gain.html" target="_blank" rel="noopener">Project Zero: Exploiting the DRAM rowhammer bug</a><span>The 2015 write-up of the page table attack.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Tiny paging machine: 8-bit virtual addresses, 16-byte pages (4-bit offset), 16 pages, 8 physical frames.
+  (function () {
+    const $ = id => document.getElementById(id);
+    // Page tables: page -> frame, or null when the page is not mapped.
+    const PT = {
+      A: [3, null, 7, null, null, null, null, null, null, null, null, null, null, null, 1, null],
+      B: [5, null, 6, 2, null, null, null, null, null, null, null, null, null, null, 4, null],
+    };
+    const LABEL = { 0: 'code', 2: 'heap', 3: 'heap', 14: 'stack' };
+    let proc = 'A', tlb = [], hot = null, hits = 0, misses = 0;
+    const hex = (v, n = 2) => '0x' + v.toString(16).toUpperCase().padStart(n, '0');
+
+    function translate(va) {
+      const page = va >> 4, off = va & 15, frame = PT[proc][page];
+      const t = tlb.find(e => e.proc === proc && e.page === page);
+      hot = { page, off, frame, va, tlbHit: !!t };
+      $('vm-split').innerHTML = `<span class="eq">${hex(va)} =</span><span class="pg">page ${page}</span><span class="off">offset ${off} (0x${off.toString(16).toUpperCase()})</span>` +
+        (frame !== null ? `<span class="eq">→</span><span class="pg">frame ${frame}</span><span class="off">offset ${off}</span><span class="eq">= ${hex(frame * 16 + off)}</span>` : '');
+      const msg = $('vm-msg');
+      if (frame === null) {
+        msg.className = 'vm-msg fault';
+        msg.textContent = `Page fault: page ${page} isn't mapped for process ${proc}. This address was never given to the process, so the OS ends it with a segmentation fault.`;
+        misses++;
+      } else {
+        msg.className = 'vm-msg';
+        if (t) { hits++; t.used = Date.now(); msg.textContent = `TLB hit: the translation page ${page} → frame ${frame} was cached, so no page table lookup was needed. Physical address ${hex(frame * 16 + off)}.`; }
+        else {
+          misses++;
+          msg.textContent = `TLB miss: the MMU reads process ${proc}'s page table, finds page ${page} → frame ${frame}, and caches it. Physical address ${hex(frame * 16 + off)}.`;
+          if (tlb.length === 4) tlb.sort((a, b) => a.used - b.used).shift();
+          tlb.push({ proc, page, frame, used: Date.now() });
+        }
+      }
+      render();
+    }
+
+    function render() {
+      $('vm-pt-h').textContent = `Process ${proc}'s page table`;
+      $('vm-pt').innerHTML = '<thead><tr><th>Page</th><th>Valid</th><th>Frame</th><th></th></tr></thead><tbody>' +
+        PT[proc].map((f, p) =>
+          `<tr class="${hot && hot.page === p ? 'hot' : ''}${f === null ? ' invalid' : ''}"><td>${p}</td><td>${f === null ? 0 : 1}</td><td>${f === null ? '–' : f}</td><td>${LABEL[p] || ''}</td></tr>`).join('') +
+        '</tbody>';
+      const owner = {};
+      ['A', 'B'].forEach(P => PT[P].forEach((f, p) => { if (f !== null) owner[f] = `${P} page ${p}`; }));
+      $('vm-frames').innerHTML = Array.from({ length: 8 }, (_, f) => `<div class="frame ${owner[f] ? owner[f][0] : ''}${hot && hot.frame === f ? ' hot' : ''}">frame ${f}<br>${owner[f] || 'free'}</div>`).join('');
+      $('vm-tlb').innerHTML = Array.from({ length: 4 }, (_, i) => {
+        const e = tlb[i];
+        return e ? `<div class="${hot && hot.tlbHit && e.proc === proc && e.page === hot.page ? 'hot' : ''}">${e.proc}: page ${e.page} → frame ${e.frame}</div>` : '<div class="empty">empty</div>';
+      }).join('');
+      $('vm-stats').textContent = `TLB hits: ${hits}, misses and faults: ${misses}. Unmapped pages are grayed out.`;
+    }
+    ['A', 'B'].forEach(p => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = 'Process ' + p; b.setAttribute('aria-pressed', p === proc);
+      b.onclick = () => { proc = p; [...$('vm-proc').children].forEach(c => c.setAttribute('aria-pressed', c === b)); hot = null; render(); };
+      $('vm-proc').append(b);
+    });
+    $('vm-form').onsubmit = e => {
+      e.preventDefault();
+      const v = parseInt($('vm-addr').value, 16);
+      if (!/^[0-9a-f]{1,2}$/i.test($('vm-addr').value.trim()) || isNaN(v)) { $('vm-msg').className = 'vm-msg'; $('vm-msg').textContent = 'Type one or two hex digits, like 2A or E4.'; return; }
+      translate(v);
+    };
+    translate(0x2A);
+  })();
+</script>
+</body>
+</html>

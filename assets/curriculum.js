@@ -61,7 +61,7 @@ window.CURRICULUM = [
     lessons: [
       { id: 'processes', title: 'Processes and system calls', href: 'lessons/25-processes.html', minutes: 40 },
       { id: 'scheduling', title: 'Scheduling', href: 'lessons/26-scheduling.html', minutes: 40 },
-      { id: 'virtual-memory', title: 'Virtual memory' },
+      { id: 'virtual-memory', title: 'Virtual memory', href: 'lessons/27-virtual-memory.html', minutes: 45 },
       { id: 'threads', title: 'Threads and race conditions' },
       { id: 'sync', title: 'Locks, deadlock, and synchronization' },
       { id: 'filesystems', title: 'File systems' },
