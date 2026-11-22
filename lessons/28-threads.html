@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Threads and race conditions | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .rc-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1rem; align-items: start; margin: .8rem 0; }
+  @media (max-width: 640px) { .rc-grid { grid-template-columns: 1fr 1fr; } .rc-shared { grid-column: 1 / -1; grid-row: 1; } }
+  .thread { border: 1.5px solid var(--ink); border-radius: 8px; padding: .6rem .7rem; background: var(--panel); }
+  .thread h4 { font: 700 .9rem var(--sans); margin: 0 0 .4rem; }
+  .thread ol { list-style: none; margin: 0 0 .5rem; padding: 0; font: .85rem var(--mono); }
+  .thread li { padding: .15rem .4rem; border-radius: 3px; }
+  .thread li.done { color: var(--pencil); text-decoration: line-through; }
+  .thread li.next { background: var(--hl); color: var(--hl-ink); }
+  .thread .reg { font: .85rem var(--mono); color: var(--ink-2); }
+  .thread .btn { width: 100%; margin-top: .4rem; font-size: .88rem; }
+  .rc-shared { text-align: center; padding: .6rem 1rem; border: 2px solid var(--ink); border-radius: 8px; background: var(--hl); color: var(--hl-ink); min-width: 8rem; }
+  .rc-shared small { display: block; font: 600 .75rem var(--sans); }
+  .rc-shared b { font: 700 2rem var(--mono); }
+  .rc-msg { font: .95rem var(--sans); margin: 0 0 .6rem; min-height: 2.8em; }
+  .rc-log { font: .82rem var(--mono); color: var(--ink-2); margin: .2rem 0 .6rem; }
+  .hist { margin-top: 1rem; padding-top: .9rem; border-top: 1px dashed var(--rule); }
+  .hrow { display: grid; grid-template-columns: 6.5rem 1fr 4rem; gap: .6rem; align-items: center; font: .85rem var(--mono); margin-bottom: .25rem; }
+  .hbar { height: 1.1rem; background: var(--ink-2); border-radius: 2px; }
+  .hbar.ok { background: var(--hl); border: 1px solid var(--ink); }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 5: Operating systems and concurrency, lesson 4 of 6</div>
+    <h1>Threads and race conditions</h1>
+    <p class="lede">Processes are isolated from each other. Threads are the opposite: several flows of control inside one process, sharing all of its memory. That makes them fast and powerful, and it creates a new kind of bug, one that depends on timing, appears one run in a thousand, and vanishes when you look for it.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="rc-title">
+    <h2 id="rc-title" style="margin-top:0;font-size:1.25rem">Two threads, one counter</h2>
+    <div class="try">Both threads run <code>counter = counter + 1</code>, which the CPU does in three steps. You are the scheduler: choose which thread runs each step. Can you make the counter end at 1 instead of 2?</div>
+    <div class="rc-grid">
+      <div class="thread" id="t1"></div>
+      <div class="rc-shared"><small>shared memory</small>counter = <b id="rc-counter">0</b></div>
+      <div class="thread" id="t2"></div>
+    </div>
+    <p class="rc-msg" id="rc-msg" aria-live="polite"></p>
+    <p class="rc-log" id="rc-log"></p>
+    <div class="tr-controls">
+      <button class="btn quiet" type="button" id="rc-random">Random schedule</button>
+      <button class="btn quiet" type="button" id="rc-reset">Reset</button>
+    </div>
+    <div class="hist">
+      <div class="try">Now let each thread add 1 three times (expected total: 6), and try 1,000 random schedules.</div>
+      <button class="btn" type="button" id="rc-many">Run 1,000 random schedules</button>
+      <div id="rc-hist" style="margin-top:.7rem"></div>
+    </div>
+  </section>
+  <p>Run T1's load, then T2's load, then both stores: each thread read 0, each wrote 1, and one increment vanished. That's a <span class="hl">lost update</span>. In the experiment, where a switch can happen after any step, most runs go wrong. Real threads usually run many instructions between switches, so the bad interleavings are rare, and rare is exactly what makes this bug dangerous: it passes testing and fails in production.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain what threads share and what each has of its own.</li>
+      <li>Explain why <code>counter = counter + 1</code> isn't safe across threads.</li>
+      <li>Define race conditions, critical sections, and atomic operations.</li>
+      <li>Explain why concurrency bugs are hard to reproduce and test.</li>
+      <li>Explain how Python's GIL affects threads, and the alternatives.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#threads">Threads</a></li>
+      <li><a href="#race">Race conditions</a></li>
+      <li><a href="#critical">Critical sections and atomic operations</a></li>
+      <li><a href="#heisen">Why these bugs are so hard</a></li>
+      <li><a href="#python">Threads in Python</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="threads">Threads</h2>
+  <p>A <span class="hl">thread</span> is an independent sequence of execution within a process. Each thread has its own registers, program counter, and stack (its own chain of function calls), but all the threads of a process share the same address space: globals, the heap, open files. Creating and switching between threads is cheaper than processes, since there's no new address space or page table to set up.</p>
+  <p>Threads are used for two reasons. <strong>Parallelism:</strong> split work across several cores to finish sooner. <strong>Overlapping waits:</strong> while one thread waits for the disk or network, others keep working, which is how a web server handles thousands of requests at once.</p>
+
+  <div class="mcq" data-id="race-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">Which does each thread in a process get its own copy of?</p>
+    <div class="choices">
+      <button type="button" data-why="The heap is shared; that's how threads pass data to each other.">The heap</button>
+      <button type="button" data-why="Global variables are shared by all threads.">Global variables</button>
+      <button type="button">Its stack and registers</button>
+      <button type="button" data-why="Open files belong to the process and are shared.">Its open files</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Stack and registers</strong>, so each thread has its own local variables and its own place in the code. Everything else is shared, which is the source of both the power and the danger.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="race">Race conditions</h2>
+  <p>One line of code is usually several machine instructions. <code>counter = counter + 1</code> is a load from memory into a register, an add, and a store back. A context switch can happen between any two instructions, and on a multicore machine the two threads may run at literally the same time. When the result depends on how the steps of different threads happen to interleave, that's a <span class="hl">race condition</span>.</p>
+  <p>This isn't hypothetical. A test for this lesson ran the C version, two threads each adding 1 a million times to a shared counter, on an ordinary laptop:</p>
+<pre><code>counter = 1632943 (expected 2000000)
+counter = 1661993 (expected 2000000)
+counter = 1032865 (expected 2000000)</code></pre>
+  <p>Hundreds of thousands of updates lost, a different number every run. Adding a lock around the increment (next lesson) gave exactly 2,000,000 every time.</p>
+
+  <div class="problem" data-id="race-p1" data-answer="1|one">
+    <span class="qtag">Practice 1</span>
+    <p class="q">Counter starts at 0. T1 loads, T2 loads, T1 adds and stores, T2 adds and stores. What's the final value?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Both threads loaded before either stored. What value did each load?</details>
+    <div class="solution" hidden><p><strong>1</strong>. Both read 0, both computed 1, both stored 1. Try that exact order in the panel.</p></div>
+  </div>
+
+  <div class="problem" data-id="race-p2" data-answer="2|two">
+    <span class="qtag">Practice 2</span>
+    <p class="q">With each thread adding 1 three times (as in the panel's experiment), what's the smallest final value a schedule can produce?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Not 1. Think about a thread loading a value, sleeping through the other thread's work, and storing its stale result near the end.</details>
+    <div class="solution" hidden><p><strong>2</strong>. T1 loads 0 and pauses. T2 does two full increments (counter 2). T1 stores 1, wiping them out. T2 loads that 1 and pauses. T1 finishes its other two increments (counter 3). T2 stores 2. Surprising, but it's a real schedule, and it's why reasoning "it can only be off by a little" fails.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="critical">Critical sections and atomic operations</h2>
+  <p>A <span class="hl">critical section</span> is a piece of code that touches shared data and must not be interleaved with another thread's critical section on the same data. What we need is <em>mutual exclusion</em>: while one thread is inside, others wait. Locks, the next lesson, provide it.</p>
+  <p>Hardware helps by offering <span class="hl">atomic</span> instructions, which happen all at once with no possible interleaving: an atomic increment, or <em>compare-and-swap</em> ("if this memory still holds 5, set it to 6; tell me whether it worked"). Every lock is built on instructions like these.</p>
+
+  <div class="mcq" data-id="race-q2" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">Which of these is <em>not</em> a race condition risk?</p>
+    <div class="choices">
+      <button type="button">Two threads each updating their own local variable</button>
+      <button type="button" data-why="Both threads read and write the same shared list.">Two threads appending to the same global list without a lock</button>
+      <button type="button" data-why="Check-then-act on shared state: another thread can change it between the check and the act.">Two threads each checking "is the seat free?" and then booking it</button>
+      <button type="button" data-why="Shared balance, read-modify-write: a classic race.">Two threads withdrawing from the same bank account</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Local variables</strong> live on each thread's own stack, so there's nothing shared to race on. The seat booking is a famous pattern called check-then-act, and it's a race even though each step looks safe.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="heisen">Why these bugs are so hard</h2>
+  <p>Race conditions depend on timing, which changes with machine load, CPU count, compiler settings, and even whether a debugger is attached. Adding a print statement can change the timing enough to make the bug disappear, which earned these bugs the nickname "Heisenbugs". A test suite that passes a thousand times proves little: the bad interleaving might need one specific microsecond to line up.</p>
+  <p>So the defenses are mostly about design: share as little as possible, protect what's shared with locks, prefer passing messages through thread-safe queues, and use tools like ThreadSanitizer (<code>-fsanitize=thread</code>), which watch every memory access during testing and report unsynchronized ones even when the bad timing didn't happen.</p>
+
+  <div class="mcq" data-id="race-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">A multithreaded test passes 999 times and fails once. You add logging, and it never fails again. What's most likely?</p>
+    <div class="choices">
+      <button type="button" data-why="The rare failure is a symptom; the logging only changed the timing.">The logging fixed the bug</button>
+      <button type="button" data-why="Hardware errors this consistent with logging are vanishingly unlikely compared with a race.">The CPU is faulty</button>
+      <button type="button" data-why="Passing 999 times doesn't mean the code is correct for every interleaving.">The one failure was a fluke; the code is correct</button>
+      <button type="button">A race condition: the logging changed the timing and hid it</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>A hidden race.</strong> Printing takes a lock inside the I/O library and slows each thread, which shifts the interleavings. The bug is still there, waiting for production load.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="python">Threads in Python</h2>
+  <p>The standard CPython interpreter has a <span class="hl">global interpreter lock</span> (GIL): only one thread runs Python bytecode at a time. That protects the interpreter's own data structures, and it means threads don't speed up pure-Python computation. They still help with waiting on I/O, since a thread releases the GIL while it waits. In a test for this lesson, Python 3.14's version of the two-thread counter happened to give the right answer, because switches between threads rarely landed in the middle of the increment. That's luck, not safety: <code>counter += 1</code> is still several bytecode instructions.</p>
+  <p>Python is changing here. PEP 703 added an optional build without the GIL ("free-threaded" Python), officially supported since Python 3.14, where threads really do run Python code in parallel, and races like the panel's show up the same way they do in C. For parallel computation today, the usual choices are the <code>multiprocessing</code> module (separate processes, each with its own interpreter) or libraries like NumPy that release the GIL inside compiled code. For handling many network connections, <code>asyncio</code> runs many tasks on one thread, switching only at <code>await</code>.</p>
+
+  <div class="mcq" data-id="race-q4" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">You want to speed up a CPU-heavy pure-Python calculation on an 8-core machine, using standard CPython with the GIL. What helps?</p>
+    <div class="choices">
+      <button type="button" data-why="With the GIL, only one thread runs Python bytecode at a time, so threads won't add CPU parallelism.">8 threads with the threading module</button>
+      <button type="button">8 processes with the multiprocessing module</button>
+      <button type="button" data-why="asyncio is for overlapping waits on one thread; it doesn't add CPU parallelism.">asyncio</button>
+      <button type="button" data-why="Locks add safety, not speed.">Adding more locks</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Processes.</strong> Each has its own interpreter and GIL, so all 8 cores work at once. The cost is that processes don't share memory, so data must be sent between them.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>Therac-25, 1985 to 1987</h3>
+    <p>The Therac-25 was a radiation therapy machine controlled entirely by software, with the hardware safety interlocks of earlier models removed. Between 1985 and 1987 it gave six patients massive overdoses, by some estimates up to about 250 times the intended dose, and three of them later died. One of the causes was a race condition. If an experienced operator selected X-ray mode by mistake and then quickly edited it to electron mode, all within about eight seconds, one task was still setting up the machine with the old values while another accepted the edit. The beam fired at full X-ray power without the metal target that should have spread it. Slower operators never triggered it, so testing never found it. The investigation that followed became a founding case study in software safety, and a reason safety-critical systems keep hardware interlocks no matter how good the software seems.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>Threads share a process's memory; each has its own stack and registers.</li>
+    <li>One line of code is several instructions. Interleaving them across threads causes race conditions and lost updates.</li>
+    <li>Shared data needs critical sections with mutual exclusion; hardware atomic instructions make that possible.</li>
+    <li>Races are timing-dependent, rare, and easily hidden by debugging. Design to share less, and use sanitizers.</li>
+    <li>CPython's GIL limits parallel Python computation; use processes, compiled libraries, or the free-threaded build.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>Share work safely with a queue instead of a shared variable:</p>
+<pre><code>import threading, queue
+
+results = queue.Queue()            # thread-safe: it has its own lock inside
+
+def worker(n):
+    results.put(n * n)
+
+threads = [threading.Thread(target=worker, args=(i,)) for i in range(5)]
+for t in threads: t.start()
+for t in threads: t.join()
+
+print(sorted(results.get() for _ in range(5)))   # [0, 1, 4, 9, 16]</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 4</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="threads">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>Locks, deadlock, and synchronization</strong>: how to fix races, and the new problems the fix creates.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf" target="_blank" rel="noopener">OSTEP chapter 26: Concurrency, an introduction (PDF)</a><span>Threads, the counter race in assembly, and why it happens.</span></li>
+      <li><a href="https://cs162.org/" target="_blank" rel="noopener">Berkeley CS162</a><span>Threads, concurrency, and synchronization lectures and projects.</span></li>
+      <li><a href="https://docs.python.org/3/library/threading.html" target="_blank" rel="noopener">Python docs: threading</a><span>Threads, locks, and other synchronization tools in Python.</span></li>
+      <li><a href="https://docs.python.org/3/howto/free-threading-python.html" target="_blank" rel="noopener">Python docs: Free-threaded Python</a><span>How to install and use Python without the GIL.</span></li>
+      <li><a href="https://peps.python.org/pep-0703/" target="_blank" rel="noopener">PEP 703: Making the GIL optional</a><span>The proposal, with a clear explanation of what the GIL protects and costs.</span></li>
+      <li><a href="https://clang.llvm.org/docs/ThreadSanitizer.html" target="_blank" rel="noopener">ThreadSanitizer</a><span>The data race detector built into Clang and GCC.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Therac-25" target="_blank" rel="noopener">Therac-25 (Wikipedia)</a><span>The accidents, the software faults, and the investigation.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Interleaving simulator: each thread does load / add / store on a shared counter.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const STEPS = ['r = counter     (load)', 'r = r + 1       (add)', 'counter = r     (store)'];
+    let counter, th, log;
+    function reset() { counter = 0; th = [{ pc: 0, r: null }, { pc: 0, r: null }]; log = []; render(); }
+    function step(i) {
+      const t = th[i];
+      if (t.pc === 0) t.r = counter; else if (t.pc === 1) t.r += 1; else counter = t.r;
+      log.push(`T${i + 1}: ${STEPS[t.pc].split('(')[0].trim()}`);
+      t.pc++; render();
+    }
+    function render() {
+      th.forEach((t, i) => {
+        $('t' + (i + 1)).innerHTML = `<h4>Thread T${i + 1}</h4><ol>${STEPS.map((s, k) => `<li class="${k < t.pc ? 'done' : k === t.pc ? 'next' : ''}">${s}</li>`).join('')}</ol>
+          <div class="reg">register r = ${t.r === null ? '?' : t.r}</div>
+          <button class="btn" type="button" ${t.pc === 3 ? 'disabled' : ''} data-t="${i}">Run T${i + 1}'s next step</button>`;
+      });
+      document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => step(+b.dataset.t));
+      $('rc-counter').textContent = counter;
+      const done = th.every(t => t.pc === 3);
+      $('rc-msg').textContent = !log.length ? 'Pick a thread to run its next step.'
+        : done ? (counter === 2 ? 'Final value 2: correct. This schedule happened to keep the steps from overlapping.' : 'Final value 1: an update was lost. Both threads loaded 0 before either stored.')
+        : `Counter is ${counter}. T1's register: ${th[0].r ?? '?'}, T2's register: ${th[1].r ?? '?'}.`;
+      $('rc-log').textContent = log.length ? 'Schedule so far: ' + log.join(' → ') : '';
+    }
+    $('rc-reset').onclick = reset;
+    $('rc-random').onclick = () => {
+      reset();
+      while (th.some(t => t.pc < 3)) { const ready = [0, 1].filter(i => th[i].pc < 3); step(ready[Math.floor(Math.random() * ready.length)]); }
+    };
+    // 1,000 random schedules of 3 increments per thread.
+    $('rc-many').onclick = () => {
+      const counts = {};
+      for (let run = 0; run < 1000; run++) {
+        let c = 0; const T = [{ pc: 0, r: 0, n: 0 }, { pc: 0, r: 0, n: 0 }];
+        while (T.some(t => t.n < 3)) {
+          const ready = [0, 1].filter(i => T[i].n < 3), t = T[ready[Math.floor(Math.random() * ready.length)]];
+          if (t.pc === 0) t.r = c; else if (t.pc === 1) t.r++; else { c = t.r; t.n++; }
+          t.pc = (t.pc + 1) % 3;
+        }
+        counts[c] = (counts[c] || 0) + 1;
+      }
+      const max = Math.max(...Object.values(counts));
+      $('rc-hist').innerHTML = [6, 5, 4, 3, 2].map(v => `<div class="hrow"><span>ended at ${v}</span><div class="hbar${v === 6 ? ' ok' : ''}" style="width:${((counts[v] || 0) / max) * 100}%"></div><span>${counts[v] || 0}</span></div>`).join('') +
+        `<p class="rc-msg" style="margin-top:.5rem">${counts[6] || 0} of 1,000 runs got the right answer here, because this panel allows a switch after every step. Real systems switch far less often, so failures are rarer, but never impossible.</p>`;
+    };
+    reset();
+  })();
+</script>
+</body>
+</html>
