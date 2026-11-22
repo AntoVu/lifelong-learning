@@ -63,7 +63,7 @@ window.CURRICULUM = [
       { id: 'scheduling', title: 'Scheduling', href: 'lessons/26-scheduling.html', minutes: 40 },
       { id: 'virtual-memory', title: 'Virtual memory', href: 'lessons/27-virtual-memory.html', minutes: 45 },
       { id: 'threads', title: 'Threads and race conditions', href: 'lessons/28-threads.html', minutes: 40 },
-      { id: 'sync', title: 'Locks, deadlock, and synchronization' },
+      { id: 'sync', title: 'Locks, deadlock, and synchronization', href: 'lessons/29-locks-and-deadlock.html', minutes: 40 },
       { id: 'filesystems', title: 'File systems' },
     ],
   },

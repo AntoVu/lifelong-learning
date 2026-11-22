@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Locks, deadlock, and synchronization | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .dl-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1rem; align-items: start; margin: .8rem 0; }
+  @media (max-width: 640px) { .dl-grid { grid-template-columns: 1fr 1fr; } .locks { grid-column: 1 / -1; grid-row: 1; } }
+  .thread { border: 1.5px solid var(--ink); border-radius: 8px; padding: .6rem .7rem; background: var(--panel); }
+  .thread.stuck { border-color: #c0492b; box-shadow: 0 0 0 2px #e08a6d; }
+  .thread h4 { font: 700 .9rem var(--sans); margin: 0 0 .4rem; }
+  .thread ol { list-style: none; margin: 0 0 .4rem; padding: 0; font: .85rem var(--mono); }
+  .thread li { padding: .15rem .4rem; border-radius: 3px; }
+  .thread li.done { color: var(--pencil); text-decoration: line-through; }
+  .thread li.next { background: var(--hl); color: var(--hl-ink); }
+  .thread li.blocked { background: #e08a6d; color: #fff; }
+  .thread .st { font: .82rem var(--sans); color: var(--ink-2); min-height: 1.2em; }
+  .thread .btn { width: 100%; margin-top: .3rem; font-size: .88rem; }
+  .locks { display: grid; gap: .5rem; min-width: 8rem; }
+  .lock { text-align: center; padding: .5rem .7rem; border: 2px solid var(--ink); border-radius: 8px; font: .85rem var(--sans); background: var(--paper); }
+  .lock b { display: block; font: 700 1.1rem var(--mono); }
+  .lock.held { background: var(--hl); color: var(--hl-ink); }
+  .dl-msg { font: .95rem var(--sans); margin: 0 0 .6rem; min-height: 2.8em; }
+  .dl-msg.bad { color: #a33a1f; font-weight: 600; }
+  @media (prefers-color-scheme: dark) { .dl-msg.bad { color: #f2a48e; } }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 5: Operating systems and concurrency, lesson 5 of 6</div>
+    <h1>Locks, deadlock, and synchronization</h1>
+    <p class="lede">The last lesson's races have a simple fix: a lock, so only one thread at a time can touch the shared data. But locks bring their own failure. Two threads can each hold a lock the other needs, and wait for each other forever. This lesson covers both, and the tools that help you avoid them.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="dl-title">
+    <h2 id="dl-title" style="margin-top:0;font-size:1.25rem">Make two threads deadlock</h2>
+    <div class="try">Each thread needs both locks to do its work. Choose which thread takes each step. Can you get them stuck? Then switch on the fix and try again.</div>
+    <div class="seg" id="dl-mode" role="group" aria-label="Lock order"></div>
+    <div class="dl-grid">
+      <div class="thread" id="th0"></div>
+      <div class="locks" id="dl-locks"></div>
+      <div class="thread" id="th1"></div>
+    </div>
+    <p class="dl-msg" id="dl-msg" aria-live="polite"></p>
+    <div class="tr-controls"><button class="btn quiet" type="button" id="dl-reset">Reset</button></div>
+  </section>
+  <p>The deadlock takes just two steps: T1 locks A, then T2 locks B. Now T1 waits for B, which T2 holds, and T2 waits for A, which T1 holds. Neither can move, and nothing will ever free them. With the fix, both threads take the locks in the same order, A then B, and no schedule can get stuck.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Use a lock to protect a critical section, and explain its costs.</li>
+      <li>Explain the four conditions for deadlock, and prevent it with lock ordering.</li>
+      <li>Explain what condition variables and semaphores are for.</li>
+      <li>Use higher-level tools: thread-safe queues and message passing.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#locks">Locks</a></li>
+      <li><a href="#cost">The cost of locking</a></li>
+      <li><a href="#deadlock">Deadlock</a></li>
+      <li><a href="#waiting">Waiting for something to happen</a></li>
+      <li><a href="#higher">Higher-level tools</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="locks">Locks</h2>
+  <p>A <span class="hl">lock</span> (also called a mutex, for mutual exclusion) has two operations. <code>acquire</code> takes the lock if it's free, or waits until it is. <code>release</code> gives it back. Put every access to the shared data between the two, and only one thread can be inside at a time:</p>
+<pre><code>import threading
+
+counter = 0
+lock = threading.Lock()
+
+def work():
+    global counter
+    for _ in range(1_000_000):
+        with lock:              # acquire; released automatically, even on an exception
+            counter += 1</code></pre>
+  <p>Locks are built from the atomic hardware instructions mentioned last lesson. When a lock is taken, a waiting thread can either spin (keep checking, good for very short waits) or ask the OS to put it to sleep until the lock is released (good for longer ones). Real locks usually spin briefly, then sleep.</p>
+
+  <div class="problem" data-id="sync-p1" data-answer="2000000|2,000,000|2 000 000">
+    <span class="qtag">Practice 1</span>
+    <p class="q">The last lesson's C program, two threads each adding 1 a million times, was run again with a mutex around the increment. What total did it print?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>With mutual exclusion, no increment can overlap another.</details>
+    <div class="solution" hidden><p><strong>2,000,000</strong>, every run. It was also noticeably slower than the broken version, which is the next section.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="cost">The cost of locking</h2>
+  <p>A lock makes a critical section run one thread at a time, so it's a piece of your program that can't use more than one core. Amdahl's law from stage 4 applies directly: the more time spent holding locks, the less extra cores help. And when many threads want the same lock (<em>contention</em>), they spend their time waiting instead of working.</p>
+  <p>That creates a design choice. <strong>Coarse-grained</strong> locking, one lock for a whole data structure, is simple and hard to get wrong, but it serializes everything. <strong>Fine-grained</strong> locking, say one lock per bucket of a hash table, lets threads work on different parts at once, but there are more locks to get right, which leads straight to the next problem.</p>
+
+  <div class="mcq" data-id="sync-q1" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">A web server uses one global lock around its entire in-memory cache. Under heavy load, adding more CPU cores barely helps. Why?</p>
+    <div class="choices">
+      <button type="button" data-why="The cache is in memory; disk speed isn't the limit here.">The disk is too slow</button>
+      <button type="button">Every request must take the same lock, so cache work runs one thread at a time</button>
+      <button type="button" data-why="Locks don't cause lost updates; they prevent them.">The lock causes lost updates</button>
+      <button type="button" data-why="It's not deadlocked: requests do finish, just slowly.">The server is deadlocked</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Contention on one lock.</strong> The fix is finer-grained locking (for example, split the cache into shards, each with its own lock) or a data structure designed for concurrent access.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="deadlock">Deadlock</h2>
+  <p>A <span class="hl">deadlock</span> is a set of threads each waiting for something another one holds, so none can proceed. In 1971, Edward Coffman and colleagues showed that a deadlock requires four conditions at once:</p>
+  <ol>
+    <li><strong>Mutual exclusion:</strong> a resource can be held by only one thread.</li>
+    <li><strong>Hold and wait:</strong> a thread holds one resource while waiting for another.</li>
+    <li><strong>No preemption:</strong> resources can't be taken away from a thread.</li>
+    <li><strong>Circular wait:</strong> there's a cycle of threads, each waiting for the next.</li>
+  </ol>
+  <p>Break any one and deadlock is impossible. The most practical target is circular wait: give the locks a fixed global order, and always acquire them in that order. A cycle would need some thread to take a "later" lock before an "earlier" one, which the rule forbids. That's the panel's fix. (Other approaches exist, like taking all locks at once or giving up and retrying after a timeout, but lock ordering is the everyday one.)</p>
+
+  <div class="mcq" data-id="sync-q2" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">Which deadlock condition does "always lock A before B" break?</p>
+    <div class="choices">
+      <button type="button" data-why="Each lock is still held by one thread at a time.">Mutual exclusion</button>
+      <button type="button" data-why="A thread can still hold A while waiting for B.">Hold and wait</button>
+      <button type="button" data-why="Locks still can't be taken from their holder.">No preemption</button>
+      <button type="button">Circular wait</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Circular wait.</strong> If everyone takes A before B, nobody can hold B while waiting for A, so the cycle can't form.</p></div>
+  </div>
+
+  <p>The classic illustration is Dijkstra's <em>dining philosophers</em>: five philosophers around a table, one fork between each pair, and each needs both neighboring forks to eat. If all five pick up their left fork at the same moment, everyone waits forever for a right fork.</p>
+
+  <div class="problem" data-id="sync-p2" data-answer="5|five">
+    <span class="qtag">Practice 2</span>
+    <p class="q">In that deadlock, how many forks are being held?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Each philosopher holds their left fork.</details>
+    <div class="solution" hidden><p>All <strong>5</strong>: every fork is held, and each philosopher waits for one held by a neighbor, a cycle of five. The lock-ordering fix: number the forks and always pick up the lower-numbered one first. One philosopher then reaches for their right fork first, and the cycle can't close.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="waiting">Waiting for something to happen</h2>
+  <p>Locks protect data, but threads also need to wait for events: a consumer waits until a queue has an item; a producer waits until there's room. Checking in a loop (busy-waiting) burns CPU. A <span class="hl">condition variable</span> lets a thread release its lock and sleep until another thread signals that something changed. A <span class="hl">semaphore</span>, invented by Dijkstra in the 1960s, is a counter with wait and signal operations, useful for limiting how many threads may use something at once, like ten database connections.</p>
+
+  <div class="mcq" data-id="sync-q3" data-correct="0">
+    <span class="qtag">Check</span>
+    <p class="q">What problem does a condition variable solve?</p>
+    <div class="choices">
+      <button type="button">Waiting efficiently until some condition becomes true, without spinning in a loop</button>
+      <button type="button" data-why="Mutual exclusion is the lock's job; condition variables are used together with a lock.">Making a variable safe to read and write from many threads</button>
+      <button type="button" data-why="Lock ordering prevents deadlock; condition variables don't.">Preventing deadlock</button>
+      <button type="button" data-why="Conditions in if statements don't need any special support.">Speeding up if statements</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Efficient waiting.</strong> The waiting thread sleeps, using no CPU, until another thread signals. It must still recheck the condition when it wakes, because another thread may have gotten there first.</p></div>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="higher">Higher-level tools</h2>
+  <p>Low-level locks are easy to misuse, so most real code reaches for higher-level tools first:</p>
+  <ul>
+    <li><strong>Thread-safe queues</strong> (<code>queue.Queue</code> in Python): one set of threads puts work in, another takes it out, and the queue handles all the locking.</li>
+    <li><strong>Message passing:</strong> threads don't share data at all; they send each other messages. Go's guideline sums it up: "Do not communicate by sharing memory; instead, share memory by communicating."</li>
+    <li><strong>Immutable data:</strong> if nothing can change, there's nothing to race on.</li>
+    <li><strong>Concurrent data structures</strong> built by experts, like Java's <code>ConcurrentHashMap</code>.</li>
+  </ul>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>The Northeast blackout, 2003</h3>
+    <p>On August 14, 2003, a power line in Ohio sagged into a tree and shut off. That kind of fault happens all the time, and the control room's alarm system is supposed to warn operators so they can reroute power. But a race condition in the alarm software, General Electric's XA/21 energy management system, had stalled it, silently. For over an hour, operators at FirstEnergy saw no alarms while more lines failed, and they didn't know their screens were frozen. The failures cascaded until at least 265 power plants shut down and about 55 million people in the U.S. and Canada lost power, some for days. A rare timing between parts of the software had left the alarm process stuck, the kind of bug the last two lessons describe.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>A lock gives mutual exclusion: acquire before touching shared data, release after. In Python, use <code>with lock:</code>.</li>
+    <li>Locked sections run one thread at a time, so contention limits scaling. Coarse locks are simple; fine locks scale but are harder.</li>
+    <li>Deadlock needs mutual exclusion, hold and wait, no preemption, and circular wait. Prevent it by always taking locks in one global order.</li>
+    <li>Condition variables and semaphores let threads wait for events without spinning.</li>
+    <li>Prefer queues, message passing, and immutable data over hand-rolled locking.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>A producer and consumer, with all the synchronization inside the queue:</p>
+<pre><code>import threading, queue
+
+jobs = queue.Queue(maxsize=3)       # put() waits when full, get() waits when empty
+
+def producer():
+    for i in range(6):
+        jobs.put(i)
+    jobs.put(None)                  # a signal that there's no more work
+
+def consumer():
+    while (item := jobs.get()) is not None:
+        print("processed", item)
+
+threading.Thread(target=producer).start()
+consumer()</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 5</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="sync">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">Next: <strong>File systems</strong>, the last lesson of the stage: how bytes on a disk become folders and files that survive a crash.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/threads-locks.pdf" target="_blank" rel="noopener">OSTEP chapter 28: Locks (PDF)</a><span>How locks are built from atomic instructions, spinning versus sleeping.</span></li>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/threads-cv.pdf" target="_blank" rel="noopener">OSTEP chapter 30: Condition variables (PDF)</a><span>The producer-consumer problem, done carefully.</span></li>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/threads-sema.pdf" target="_blank" rel="noopener">OSTEP chapter 31: Semaphores (PDF)</a><span>Dijkstra's semaphores and the dining philosophers.</span></li>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf" target="_blank" rel="noopener">OSTEP chapter 32: Common concurrency problems (PDF)</a><span>A study of real concurrency bugs, and the four deadlock conditions.</span></li>
+      <li><a href="https://go.dev/blog/codelab-share" target="_blank" rel="noopener">The Go Blog: Share memory by communicating</a><span>The message-passing approach, with a worked example.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Dining_philosophers_problem" target="_blank" rel="noopener">Dining philosophers problem (Wikipedia)</a><span>The classic puzzle and several solutions.</span></li>
+      <li><a href="https://en.wikipedia.org/wiki/Northeast_blackout_of_2003" target="_blank" rel="noopener">Northeast blackout of 2003 (Wikipedia)</a><span>The cascade, the alarm software failure, and what changed afterward.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Deadlock simulator: two threads, two locks. In "opposite order" mode, T2 takes B before A.
+  (function () {
+    const $ = id => document.getElementById(id);
+    let mode = 'Opposite order', holder, th;
+    const prog = i => {
+      const [x, y] = mode === 'Opposite order' && i === 1 ? ['B', 'A'] : ['A', 'B'];
+      return [['lock', x], ['lock', y], ['work'], ['unlock', y], ['unlock', x]];
+    };
+    function reset() { holder = { A: null, B: null }; th = [{ pc: 0, waiting: null }, { pc: 0, waiting: null }]; render(); }
+    function step(i) {
+      const t = th[i], ins = prog(i)[t.pc];
+      if (!ins) return;
+      if (ins[0] === 'lock') {
+        if (holder[ins[1]] === null) { holder[ins[1]] = i; t.waiting = null; t.pc++; }
+        else { t.waiting = ins[1]; }
+      } else if (ins[0] === 'unlock') { holder[ins[1]] = null; t.pc++; }
+      else t.pc++;
+      // A waiting thread whose lock is now free can retry on its next step.
+      render();
+    }
+    function render() {
+      const stuck = th.every((t, i) => t.waiting && holder[t.waiting] !== null && holder[t.waiting] !== i);
+      th.forEach((t, i) => {
+        const p = prog(i), blocked = t.waiting && holder[t.waiting] !== null && holder[t.waiting] !== i;
+        const el = $('th' + i);
+        el.className = 'thread' + (stuck ? ' stuck' : '');
+        el.innerHTML = `<h4>Thread T${i + 1}</h4><ol>${p.map((ins, k) => `<li class="${k < t.pc ? 'done' : k === t.pc ? (blocked ? 'blocked' : 'next') : ''}">${ins[0] === 'work' ? 'use both' : ins[0] + '(' + ins[1] + ')'}</li>`).join('')}</ol>
+          <div class="st">${t.pc === p.length ? 'Finished.' : blocked ? `Waiting for lock ${t.waiting}, held by T${holder[t.waiting] + 1}.` : ''}</div>
+          <button class="btn" type="button" data-t="${i}" ${t.pc === p.length || stuck ? 'disabled' : ''}>Run T${i + 1}'s next step</button>`;
+      });
+      document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => step(+b.dataset.t));
+      $('dl-locks').innerHTML = ['A', 'B'].map(l => `<div class="lock${holder[l] !== null ? ' held' : ''}">lock <b>${l}</b>${holder[l] !== null ? 'held by T' + (holder[l] + 1) : 'free'}</div>`).join('');
+      const msg = $('dl-msg');
+      const done = th.every((t, i) => t.pc === prog(i).length);
+      msg.className = 'dl-msg' + (stuck ? ' bad' : '');
+      msg.textContent = stuck ? 'Deadlock! T1 waits for a lock T2 holds, and T2 waits for a lock T1 holds. A cycle: neither can ever continue.'
+        : done ? (mode === 'Opposite order' ? 'Both finished. This schedule was lucky; try T1, then T2, as the first two steps.' : 'Both finished. With one lock order, every schedule finishes.')
+        : mode === 'Same order (the fix)' ? 'Both threads take A first. Whoever gets A will also get B, so no cycle can form.' : 'T1 takes A then B; T2 takes B then A.';
+    }
+    ['Opposite order', 'Same order (the fix)'].forEach(m => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = m; b.setAttribute('aria-pressed', m === mode);
+      b.onclick = () => { mode = m; [...$('dl-mode').children].forEach(c => c.setAttribute('aria-pressed', c === b)); reset(); };
+      $('dl-mode').append(b);
+    });
+    $('dl-reset').onclick = reset;
+    reset();
+  })();
+</script>
+</body>
+</html>
