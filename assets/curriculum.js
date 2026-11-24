@@ -64,7 +64,7 @@ window.CURRICULUM = [
       { id: 'virtual-memory', title: 'Virtual memory', href: 'lessons/27-virtual-memory.html', minutes: 45 },
       { id: 'threads', title: 'Threads and race conditions', href: 'lessons/28-threads.html', minutes: 40 },
       { id: 'sync', title: 'Locks, deadlock, and synchronization', href: 'lessons/29-locks-and-deadlock.html', minutes: 40 },
-      { id: 'filesystems', title: 'File systems' },
+      { id: 'filesystems', title: 'File systems', href: 'lessons/30-file-systems.html', minutes: 40 },
     ],
   },
   { title: 'Networks and the web', summary: 'From packets to TCP to HTTP, and how a browser turns a URL into a page.', sources: ['Stanford CS144', 'Berkeley CS168'] },

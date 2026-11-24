@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>File systems | Lifelong Learning</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%274%27 width=%2724%27 height=%2724%27 rx=%275%27 fill=%27%23f6e15a%27 stroke=%27%231b2a41%27 stroke-width=%273%27/%3E%3Crect x=%2710%27 y=%279%27 width=%2712%27 height=%277%27 rx=%272%27 fill=%27%231b2a41%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .cr-top { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; margin-bottom: .8rem; }
+  .cr-steps { list-style: none; padding: 0; margin: 0 0 .8rem; display: grid; gap: .35rem; }
+  .cr-steps li { display: grid; grid-template-columns: 2rem 1fr auto; gap: .6rem; align-items: center; padding: .4rem .6rem; border: 1.5px solid var(--rule); border-radius: 6px; font: .9rem var(--sans); background: var(--paper); }
+  .cr-steps li.done { border-color: var(--ink); background: var(--panel); }
+  .cr-steps li.lost { border-style: dashed; color: var(--pencil); }
+  .cr-steps li b { font: 700 .85rem var(--mono); }
+  .cr-steps li button { font: 600 .8rem var(--sans); padding: .25em .6em; border: 1.5px solid var(--ink); border-radius: 5px; background: var(--panel); color: var(--ink); cursor: pointer; }
+  .cr-steps li button:hover { background: #e08a6d; color: #fff; }
+  .disk { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin-bottom: .6rem; }
+  @media (max-width: 600px) { .disk { grid-template-columns: 1fr; } }
+  .disk div { border: 1.5px solid var(--ink); border-radius: 6px; padding: .4rem .6rem; font: .82rem var(--mono); background: var(--panel); }
+  .disk div small { display: block; font: 600 .72rem var(--sans); color: var(--ink-2); }
+  .disk div.new { background: var(--hl); color: var(--hl-ink); }
+  .disk div.new small { color: var(--hl-ink); }
+  .cr-verdict { font: .95rem var(--sans); margin: 0; padding: .6rem .8rem; border-left: 4px solid var(--hl); background: var(--paper); min-height: 2.8em; }
+  .cr-verdict.bad { border-left-color: #c0492b; }
+  .fs-ok { font-weight: 600; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wide"><a class="brand" href="../index.html">Lifelong Learning</a><div class="stats" id="stats"></div></div><div class="readbar"></div></header>
+
+<main class="wrap">
+  <header class="lesson-head">
+    <div class="crumb"><a href="../index.html">Course map</a>, stage 5: Operating systems and concurrency, lesson 6 of 6</div>
+    <h1>File systems</h1>
+    <p class="lede">A disk only knows numbered blocks of bytes. Yet you see folders, file names, and documents that survive a power cut. The file system is the layer that turns one into the other, and its hardest job is surprisingly specific: making sure a crash at the worst possible moment doesn't leave a mess.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="cr-title">
+    <h2 id="cr-title" style="margin-top:0;font-size:1.25rem">Pull the plug</h2>
+    <div class="try">Appending one block to a file takes three separate writes to the disk. Click "Crash before this" on any step to cut the power just before it, and see what state the disk is left in. Then turn on journaling.</div>
+    <div class="cr-top"><div class="seg" id="cr-mode" role="group" aria-label="File system mode"></div></div>
+    <ol class="cr-steps" id="cr-steps"></ol>
+    <div class="disk" id="cr-disk"></div>
+    <p class="cr-verdict" id="cr-verdict" aria-live="polite"></p>
+  </section>
+  <p>Without a journal, a crash between the inode write and the bitmap write leaves a file pointing at a block the system thinks is free, which will later be handed to another file. And disks are allowed to reorder writes, so other orders are possible too, each with its own kind of damage: an inode pointing at garbage, or a block marked used that nothing points to. With journaling, every crash point recovers to either the old state or the new one, never something in between.</p>
+
+  <div class="goals">
+    <h2>By the end of this lesson you can</h2>
+    <ul>
+      <li>Explain files, inodes, and directories, and how a path is looked up.</li>
+      <li>Describe how a file system lays out blocks on a disk.</li>
+      <li>Calculate how big a file an inode can describe.</li>
+      <li>Explain why crashes threaten consistency, and how journaling fixes it.</li>
+      <li>Explain what <code>fsync</code> guarantees, and why <code>write</code> alone doesn't.</li>
+    </ul>
+  </div>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#files">Files, inodes, and directories</a></li>
+      <li><a href="#layout">On the disk</a></li>
+      <li><a href="#crash">Crash consistency and journaling</a></li>
+      <li><a href="#fsync">When is data really saved?</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="files">Files, inodes, and directories</h2>
+  <p>To a Unix file system, a <strong>file</strong> is just an array of bytes plus some facts about it: its size, owner, permissions, timestamps, and where its bytes are stored. Those facts live in a record called an <span class="hl">inode</span>, identified by a number. Notice what's missing: the file's name.</p>
+  <p>Names live in <strong>directories</strong>. A directory is a special file whose contents are a list of (name, inode number) pairs. To open <code>/home/ada/notes.txt</code>, the OS starts at the root directory's inode, which it knows, reads that directory to find <code>home</code>'s inode number, reads <code>home</code> to find <code>ada</code>, reads <code>ada</code> to find <code>notes.txt</code>, and finally reaches the file's inode. Recently used directories and inodes stay cached in memory, so this is usually fast.</p>
+  <p>Because names just point to inodes, one file can have several names: a <em>hard link</em>. The inode counts its links, and the file's data is only freed when the count reaches zero and no program has it open. That's why the Unix call to delete a file is named <code>unlink</code>.</p>
+
+  <div class="problem" data-id="fs-p1" data-answer="3|three">
+    <span class="qtag">Practice 1</span>
+    <p class="q">Opening <code>/home/ada/notes.txt</code>, how many directories does the OS read to find the file's inode?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>Every directory on the path is read, starting with the root.</details>
+    <div class="solution" hidden><p><strong>3</strong>: <code>/</code>, <code>home</code>, and <code>ada</code>. Deeply nested paths cost more lookups, which is one reason the OS caches directory entries aggressively.</p></div>
+  </div>
+
+  <div class="mcq" data-id="fs-q1" data-correct="2">
+    <span class="qtag">Check</span>
+    <p class="q">A file has two hard links. You delete one name. What happens to the file's data?</p>
+    <div class="choices">
+      <button type="button" data-why="The data isn't tied to any one name; both names point at the same inode.">It's deleted, and the other name now points to nothing</button>
+      <button type="button" data-why="Hard links aren't copies; there was only ever one copy of the data.">A copy is kept for the other name</button>
+      <button type="button">Nothing: the inode's link count drops to 1, and the other name still works</button>
+      <button type="button" data-why="Deleting one link is a normal, allowed operation.">The delete fails</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Nothing happens to the data.</strong> It's freed only when the last link is gone. The Python example at the end of this lesson shows it.</p></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="layout">On the disk</h2>
+  <p>A typical Unix file system divides the disk into fixed-size <em>blocks</em>, usually 4 KB, and reserves some for bookkeeping: a <strong>superblock</strong> describing the whole file system, <strong>bitmaps</strong> marking which inodes and data blocks are in use, the <strong>inode table</strong>, and then the data blocks themselves.</p>
+  <p>An inode records where its file's data is with a list of block pointers. A few are <em>direct</em>, each pointing at a data block. For bigger files, an <em>indirect</em> pointer points at a block full of more pointers, and a double-indirect pointer at a block of those. Small files, which are most files, need only the direct pointers; huge files are still possible. (Newer file systems like ext4 describe large files with <em>extents</em>, "blocks 5,000 to 9,000", instead of one pointer per block.)</p>
+
+  <div class="problem" data-id="fs-p2" data-answer="48|48kb|48 kb">
+    <span class="qtag">Practice 2</span>
+    <p class="q">An inode has 12 direct pointers, and blocks are 4 KB. How many KB can a file hold using only direct pointers?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>One block per pointer.</details>
+    <div class="solution" hidden><p>12 × 4 KB = <strong>48 KB</strong>. That's the classic Unix design, still used by ext2 and ext3, and it covers most files on a typical system.</p></div>
+  </div>
+
+  <div class="problem" data-id="fs-p3" data-answer="1024|1,024">
+    <span class="qtag">Practice 3</span>
+    <p class="q">A single indirect block is 4 KB and holds 4-byte block pointers. How many pointers fit in it?</p>
+    <form class="answer-row"><input aria-label="Your answer" inputmode="numeric" autocomplete="off"><button class="btn">Check</button></form>
+    <div class="feedback" aria-live="polite"></div>
+    <details class="hint"><summary>Hint</summary>4,096 bytes divided by 4 bytes each.</details>
+    <div class="solution" hidden><p><strong>1,024</strong> pointers, so one indirect pointer adds 1,024 × 4 KB = 4 MB of file. A double-indirect block adds 1,024 times that again: 4 GB.</p></div>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="crash">Crash consistency and journaling</h2>
+  <p>Growing a file by one block means updating three places: the data block itself, the inode (new size and pointer), and the data bitmap (mark the block used). The disk can only write one at a time, and power can fail between any two. The panel shows what each partial state means. The old fix was a program called <code>fsck</code> that scanned the whole disk after a crash to find and repair inconsistencies, which took hours on large disks.</p>
+  <p>Modern file systems use <span class="hl">journaling</span>, an idea borrowed from databases (stage 7). Before touching the real locations, write a description of all the changes to a separate area, the journal, and then write a small "commit" record. Only after the commit is safely on disk are the real locations updated. After a crash, the OS checks the journal: a committed transaction is replayed; an uncommitted one is ignored. Either way, the update happened completely or not at all. ext4, NTFS, and XFS journal; Apple's APFS and Linux's Btrfs get the same guarantee differently, by never overwriting data in place (copy-on-write, from lesson 3).</p>
+
+  <div class="mcq" data-id="fs-q2" data-correct="1">
+    <span class="qtag">Check</span>
+    <p class="q">Power fails after a journaled transaction is written to the journal but before its commit record. What does recovery do?</p>
+    <div class="choices">
+      <button type="button" data-why="Without a commit record, the transaction might be incomplete, so it can't be trusted.">Replays the transaction</button>
+      <button type="button">Ignores it: the file system stays in its old, consistent state</button>
+      <button type="button" data-why="The point of the journal is to avoid full scans.">Scans the whole disk with fsck</button>
+      <button type="button" data-why="Only this one update is discarded; the rest of the file system is fine.">Erases the file system</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Ignore it.</strong> The update is lost, but nothing is corrupted. The commit record is the single point where the update becomes official.</p></div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="fsync">When is data really saved?</h2>
+  <p>When <code>write()</code> returns, your data is usually only in the OS's page cache in memory, which will be written to disk in a few seconds. That's much faster, and it's why a power cut can lose recent writes. Programs that must not lose data call <span class="hl"><code>fsync()</code></span>, which doesn't return until the file's data is on the disk itself. Databases call it every time they promise a transaction is saved; text editors call it when you save. It's slow, so programs batch work between calls.</p>
+  <p>Disks add their own layers: drives have caches too, and SSDs store data in flash cells that wear out, so their firmware spreads writes around and moves data behind the scenes. File systems and drives have to cooperate carefully for <code>fsync</code> to mean what it says.</p>
+
+  <div class="mcq" data-id="fs-q3" data-correct="3">
+    <span class="qtag">Check</span>
+    <p class="q">Your program calls <code>write()</code>, it returns successfully, and a second later the power fails. Is the data safe?</p>
+    <div class="choices">
+      <button type="button" data-why="Success only means the OS accepted the data, usually into memory.">Yes, write() returning means it's on disk</button>
+      <button type="button" data-why="Journaling protects consistency, not recent data that was never written.">Yes, because the file system journals</button>
+      <button type="button" data-why="It might have been written already; there's no guarantee either way.">No, it's definitely lost</button>
+      <button type="button">Not guaranteed: it may still have been in the page cache. Only fsync() guarantees it</button>
+    </div>
+    <div class="feedback" aria-live="polite"></div>
+    <div class="solution" hidden><p><strong>Not guaranteed.</strong> Journaling keeps the file system consistent, but consistent can mean "without your last second of writes". If losing it matters, call <code>fsync</code>.</p></div>
+  </div>
+
+  <h2>When this goes wrong</h2>
+  <div class="story">
+    <h3>fsyncgate, 2018</h3>
+    <p>PostgreSQL, one of the most trusted databases, relied on a reasonable assumption: if <code>fsync()</code> fails, perhaps because of a disk error, you can call it again later, and when it succeeds your data is on disk. In 2018, its developers discovered that on Linux this wasn't true. When writing back cached data failed, Linux reported the error once and then marked those pages clean, so the next <code>fsync()</code> returned success even though the data had never reached the disk. Data could be lost while every check passed. After long discussions between database and kernel developers, PostgreSQL changed course: since then it treats any <code>fsync</code> failure as fatal, stops, and recovers from its own log, a fix it also applied to its older supported versions. Even the most basic promise, "this is saved", depends on every layer agreeing what it means.</p>
+  </div>
+
+  <h2>What to remember</h2>
+  <ul>
+    <li>A file is an inode (metadata and block pointers) plus data blocks. Directories map names to inode numbers.</li>
+    <li>Paths are looked up one directory at a time. Hard links are extra names for one inode.</li>
+    <li>The disk holds a superblock, bitmaps, an inode table, and data blocks. Indirect pointers let small inodes describe huge files.</li>
+    <li>One logical update takes several writes; journaling makes it all-or-nothing after a crash.</li>
+    <li><code>write</code> puts data in a cache; <code>fsync</code> puts it on the disk.</li>
+  </ul>
+
+  <h3>Try it in Python</h3>
+  <p>Hard links and fsync (Linux or macOS):</p>
+<pre><code>import os
+
+with open("notes.txt", "w") as f:
+    f.write("hello")
+    f.flush()
+    os.fsync(f.fileno())          # don't return until it's really on disk
+
+os.link("notes.txt", "also-notes.txt")      # a second name for the same inode
+a, b = os.stat("notes.txt"), os.stat("also-notes.txt")
+print(a.st_ino == b.st_ino, a.st_nlink)     # True 2
+os.remove("notes.txt")
+print(open("also-notes.txt").read())        # hello: the data is still there
+os.remove("also-notes.txt")</code></pre>
+
+  <section class="finish">
+    <h2 style="margin-top:0">Finish lesson 6</h2>
+    <p class="finish-note"></p>
+    <button class="btn" type="button" data-finish="filesystems">Finish lesson</button>
+    <p style="margin:1.2rem 0 0">That's the end of stage 5. You've seen how the operating system shares one machine among many programs: processes, scheduling, virtual memory, threads, locks, and files. Stage 6, <strong>Networks and the web</strong>, connects many machines together.</p>
+  </section>
+
+  <section class="refs" aria-labelledby="refs-title">
+    <h2 id="refs-title">Learn more from the source</h2>
+    <ul>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/file-intro.pdf" target="_blank" rel="noopener">OSTEP chapter 39: Files and directories (PDF)</a><span>The file system API: inodes, links, and why delete is called unlink.</span></li>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/file-implementation.pdf" target="_blank" rel="noopener">OSTEP chapter 40: File system implementation (PDF)</a><span>A simple file system's on-disk layout, built step by step.</span></li>
+      <li><a href="https://pages.cs.wisc.edu/~remzi/OSTEP/file-journaling.pdf" target="_blank" rel="noopener">OSTEP chapter 42: Crash consistency (PDF)</a><span>The crash scenarios from the panel, fsck, and journaling in detail.</span></li>
+      <li><a href="https://pdos.csail.mit.edu/6.1810/" target="_blank" rel="noopener">MIT 6.1810: Operating System Engineering</a><span>Its file system lab extends xv6's file system, including its logging layer.</span></li>
+      <li><a href="https://man7.org/linux/man-pages/man2/fsync.2.html" target="_blank" rel="noopener">Linux manual: fsync(2)</a><span>Exactly what fsync promises.</span></li>
+      <li><a href="https://lwn.net/Articles/752063/" target="_blank" rel="noopener">LWN: PostgreSQL's fsync() surprise</a><span>The 2018 article explaining the problem for a technical audience.</span></li>
+      <li><a href="https://wiki.postgresql.org/wiki/Fsync_Errors" target="_blank" rel="noopener">PostgreSQL wiki: Fsync errors</a><span>The history of fsyncgate and how each operating system behaves.</span></li>
+    </ul>
+  </section>
+</main>
+
+<script src="../assets/progress.js"></script>
+<script src="../assets/ui.js"></script>
+<script>
+  // Crash consistency: appending one block needs three writes. Crash after step k and inspect the result.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const PLAIN = [['data', 'Write the new data block (block 9)'], ['inode', 'Update the inode: size 8 KB, pointer to block 9'], ['bitmap', 'Mark block 9 as used in the bitmap']];
+    const JOURNAL = [['j', 'Write all three changes to the journal'], ['commit', 'Write the commit record to the journal'], ['data', 'Write the data block to its real place'], ['inode', 'Write the inode to its real place'], ['bitmap', 'Write the bitmap to its real place'], ['free', 'Mark the journal entry as done']];
+    let mode = 'No journal', crashAt = null;
+
+    function verdict(done) {
+      const d = done.has('data'), i = done.has('inode'), b = done.has('bitmap');
+      if (mode === 'No journal') {
+        if (!d && !i && !b) return ['ok', 'Nothing was written. The append is lost, but the file system is consistent.'];
+        if (d && !i && !b) return ['ok', 'The data reached block 9, but nothing points to it and the bitmap says it’s free. The append is lost; nothing is corrupted.'];
+        if (d && i && !b) return ['bad', 'Inconsistent: the inode points to block 9, but the bitmap says block 9 is free. The system may later give block 9 to another file, and both files will overwrite each other.'];
+        return ['ok', 'All three writes made it. The file is 8 KB and consistent.'];
+      }
+      const committed = done.has('commit');
+      if (!done.has('j')) return ['ok', 'Recovery finds nothing in the journal. Old state: consistent, append lost.'];
+      if (!committed) return ['ok', 'Recovery finds a journal entry with no commit record and ignores it. Old state: consistent, append lost.'];
+      if (done.has('free')) return ['ok', 'The update finished and the journal entry was cleared. New state: consistent.'];
+      return ['ok', 'Recovery finds a committed transaction and replays all three writes from the journal, whatever made it to the real locations. New state: consistent.'];
+    }
+    function render() {
+      const steps = mode === 'No journal' ? PLAIN : JOURNAL;
+      const done = new Set(steps.slice(0, crashAt === null ? steps.length : crashAt).map(s => s[0]));
+      $('cr-steps').innerHTML = steps.map(([k, label], i) => `<li class="${crashAt === null || i < crashAt ? 'done' : 'lost'}"><b>${i + 1}</b><span>${label}</span><button type="button" data-crash="${i}">Crash before this</button></li>`).join('') +
+        `<li class="${crashAt === null ? 'done' : ''}"><b>✓</b><span>All writes finished</span><button type="button" data-crash="none">No crash</button></li>`;
+      $('cr-steps').querySelectorAll('[data-crash]').forEach(b => b.onclick = () => { crashAt = b.dataset.crash === 'none' ? null : +b.dataset.crash; render(); });
+      // What each structure holds on disk after the crash (or after recovery, with a journal).
+      let state = done;
+      if (mode !== 'No journal') state = done.has('commit') ? new Set(['data', 'inode', 'bitmap']) : new Set();
+      $('cr-disk').innerHTML =
+        `<div class="${state.has('data') ? 'new' : ''}"><small>data block 9</small>${state.has('data') ? 'new bytes' : 'old garbage'}</div>` +
+        `<div class="${state.has('inode') ? 'new' : ''}"><small>file's inode</small>${state.has('inode') ? 'size 8 KB, points to 9' : 'size 4 KB'}</div>` +
+        `<div class="${state.has('bitmap') ? 'new' : ''}"><small>data bitmap</small>${state.has('bitmap') ? 'block 9: used' : 'block 9: free'}</div>`;
+      const [kind, text] = verdict(done);
+      $('cr-verdict').className = 'cr-verdict' + (kind === 'bad' ? ' bad' : '');
+      $('cr-verdict').innerHTML = (crashAt === null ? '' : `<span class="fs-ok">After a crash before step ${crashAt + 1}${mode === 'No journal' ? '' : ' and recovery'}:</span> `) + text;
+    }
+    ['No journal', 'Journaling'].forEach(m => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = m; b.setAttribute('aria-pressed', m === mode);
+      b.onclick = () => { mode = m; crashAt = null; [...$('cr-mode').children].forEach(c => c.setAttribute('aria-pressed', c === b)); render(); };
+      $('cr-mode').append(b);
+    });
+    render();
+  })();
+</script>
+</body>
+</html>

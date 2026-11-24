@@ -10,6 +10,7 @@
   const STAGE_2 = ['hof', 'recursion', 'data-abstraction', 'objects', 'interpreters'];
   const STAGE_3 = ['big-o', 'linear', 'hashing', 'sorting', 'trees', 'graphs', 'shortest-paths', 'dp'];
   const STAGE_4 = ['c-pointers', 'memory', 'caches', 'assembly', 'linking', 'performance'];
+  const STAGE_5 = ['processes', 'scheduling', 'virtual-memory', 'threads', 'sync', 'filesystems'];
 
   const ACHIEVEMENTS = [
     { id: 'first-flip', name: 'Flipped a bit', desc: 'Toggle your first switch.', test: s => s.flags.flipped },
@@ -22,6 +23,7 @@
     { id: 'stage-2', name: 'Programming with abstraction', desc: 'Finish every lesson in stage 2.', test: s => STAGE_2.every(id => s.lessons[id]) },
     { id: 'stage-3', name: 'Data structures and algorithms', desc: 'Finish every lesson in stage 3.', test: s => STAGE_3.every(id => s.lessons[id]) },
     { id: 'stage-4', name: 'Computer systems', desc: 'Finish every lesson in stage 4.', test: s => STAGE_4.every(id => s.lessons[id]) },
+    { id: 'stage-5', name: 'Operating systems and concurrency', desc: 'Finish every lesson in stage 5.', test: s => STAGE_5.every(id => s.lessons[id]) },
     { id: 'streak-3', name: 'Three in a row', desc: 'Keep a 3-day streak.', test: (s, d) => streak(s, d) >= 3 },
     { id: 'streak-7', name: 'A full week', desc: 'Keep a 7-day streak.', test: (s, d) => streak(s, d) >= 7 },
     { id: 'xp-500', name: 'Five hundred', desc: 'Earn 500 XP in total.', test: s => s.xp >= 500 },
