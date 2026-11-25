@@ -9,6 +9,9 @@ with instant feedback, and links to the original course material it draws from.
 
 ## Start learning
 
+> [!NOTE]
+> This project is still a work in progress.
+
 No install or account needed:
 
 1. Download or clone this repo.
